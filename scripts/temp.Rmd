@@ -1,0 +1,1805 @@
+---
+title: "Nils_dataset_preprocessing"
+author: "Dillon Corvino"
+date: "25/01/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+Built with R version `r getRversion()`
+
+## Setup {.tabset}
+
+### Dataset information
+```{r Dataset_Info}
+
+
+```
+
+### Environment
+```{r setup}
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,  
+  eval = TRUE, 
+  tidy = TRUE
+)
+
+knitr::opts_knit$set(
+  root.dir = "../"
+)
+
+
+# Environment Set up
+rm(list = ls()) #Clean workspace
+cat("\014")     #Clean Console
+gc() # Free memory
+
+# pipeline variables
+long.compute <- FALSE
+do.plot <- TRUE
+quick.load <- TRUE
+
+# Establish working directory
+library("rstudioapi")
+
+# Set working directory to source file location
+setwd(dirname(getActiveDocumentContext()$path))
+setwd("..")
+
+# Create output directories & load custom functions & colour scheme
+source("scripts/Setup.R", local = knitr::knit_global())
+
+# script uses Seurat v5
+#install.packages('remotes')
+#remotes::install_github(repo = 'satijalab/seurat')
+
+
+#setRepositories(ind = 1:3, addURLs = c('https://satijalab.r-universe.dev', 'https://bnprks.r-universe.dev/'))
+#install.packages(c("BPCells", "presto", "glmGamPoi"))
+
+#remotes::install_github("mojaveazure/seurat-object", quiet = TRUE)
+#install.packages("Matrix")
+
+#remotes::install_github("satijalab/seurat-data", quiet = TRUE)
+#remotes::install_github("satijalab/azimuth", "seurat5", quiet = TRUE)
+#remotes::install_github("satijalab/seurat-wrappers", "seurat5", quiet = TRUE)
+
+
+library("Seurat")
+library("SeuratObject")
+library("SeuratData")
+library("Azimuth")
+library("SeuratWrappers")
+library("BPCells")
+library("presto")
+library("dplyr")
+library("scCustomize")
+library("Seurat")
+
+# if older version is needed
+# remotes::install_version("Seurat", "4.4.0", repos = c("https://satijalab.r-universe.dev", getOption("repos")))
+
+########################################
+# Parallelization of seurat functions
+########################################
+
+parallelization <- TRUE
+
+
+if(parallelization){
+  library(future)
+  # check the current active plan
+  plan()
+  
+  # detect cores
+  ncores <- parallel::detectCores()
+  ncores <- ncores-5
+  # set plan
+  plan("multisession", workers = ncores)
+  plan()
+  
+  # set max limit for global variables
+  # note this will drastically increase RAM usage, be aware of machine limits
+  # set value is in bites therefore 1000*1024^2 = 1GB Therefore set to 10GBs 
+  options(future.globals.maxSize = 10000 * 1024^2, 
+          future.rng.onMisuse="ignore") 
+}
+
+
+
+if(quick.load){
+  
+  Nils.seurat <- list(CD45Pos = LoadSeuratRds("saves/Nils_seurat_CD45Pos.rds"), CD45Neg = LoadSeuratRds("saves/Nils_seurat_CD45Neg.rds"))
+  
+}
+```
+
+### Load dataset
+```{r load_dataset}
+
+if(long.compute){
+  
+  samples <- list.dirs(path = "data", recursive = FALSE)
+  
+  # create list to store data 
+  seurat.list <- list()
+  
+  for(i in seq_along(samples)){
+    
+    # define input path
+    input.path <- paste0(samples[i])
+    
+    # read in data (GEX and ADT/hashtag)
+    sequence.data <- Seurat::Read10X(data.dir = paste0(input.path))
+    
+    
+    # extract sequence run info 
+    sample.id <- gsub("data/", "", samples[i])
+    sample.id <- gsub("_filtmatrix", "", sample.id)
+    
+    # create seurat object with gene expression 
+    seurat.temp <- CreateSeuratObject(counts = sequence.data,
+                                      project = paste0(sample.id))
+    
+    # store data in a seurat list
+    seurat.list[[paste0(sample.id)]] <- seurat.temp
+    
+    # clean environment 
+    rm(list = c("seurat.temp", "sequence.data"))
+    gc()
+    
+  }
+  
+  # for some reason creating these objects sometimes has a glitch where nfeatures etc of metadata is not generated 
+  # if this happens, restart R session and rerun from scratch
+  #seurat.list$E4@meta.data
+  
+  seurat.list$E4@meta.data
+  
+  
+  
+  ########################################
+  # Merge and annotate object
+  ########################################
+  
+  # change names of objects to more user friendly names 
+  
+  # E4 = vehicle CD45Neg
+  # F4 = vehicle CD45Pos
+  # G4 = PDS CD45Neg
+  # H4 = PDS CD45Pos
+  
+  names(seurat.list)
+  names(seurat.list) <- c("Vehicle_CD45Neg", "Vehicle_CD45Pos", "PDS_CD45Neg", "PDS_CD45Pos")
+  names(seurat.list)
+  
+  # create a vector of sequencing samples for later use in loops 
+  sample.id <- names(seurat.list)
+  sample.id
+  
+  
+  # merge object for easier QC visualisation etc
+  Nils.seurat <- scCustomize::Merge_Seurat_List(seurat.list, add.cell.ids = names(seurat.list))
+  
+  Nils.seurat # 32,285 genes across 35,302 cells
+  unique(Nils.seurat@meta.data$orig.ident)
+  
+  Nils.seurat@meta.data$SampleID <- sub("^(.*?_.*?)(_.*)$", "\\1", rownames(Nils.seurat@meta.data))
+  Nils.seurat@meta.data$Treatment <- gsub("_.*", "", Nils.seurat@meta.data$SampleID)
+  Nils.seurat@meta.data$Compartment <- gsub(".*_", "", Nils.seurat@meta.data$SampleID)
+  
+  unique(Nils.seurat@meta.data$SampleID)
+  unique(Nils.seurat@meta.data$Treatment)
+  unique(Nils.seurat@meta.data$Compartment)
+  
+  # CD45Neg and CD45Pos datasets are very different and need to be QC'd differently and integrated differently 
+  # split object to process compartments seperately 
+  Nils.seurat <- SplitObject(Nils.seurat, split.by = "Compartment")
+  
+  # fully merge data by also combining layers for all assays, for clarity, thus downstream will explicitly split layers when required
+  # layers can be combined for visualisation and subsetting 
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = JoinLayers, 
+                        assay = "RNA")
+  Nils.seurat
+  
+  rm(seurat.list)
+  
+}
+
+```
+
+
+# consider treating cd45 neg and pos fractions seperately for qc filtering, they have distinct patterns of umi per cell etc 
+
+
+## QC and Filter {.tabset}
+
+### QC & filter
+
+```{r QC_and_filter}
+
+if(long.compute){
+  
+  # Create output dir
+  
+  output.dir <- paste0("results/QC/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  for(i in seq_along(names(Nils.seurat))){
+    
+    # set idents to sampleID
+    Idents(Nils.seurat[[i]]) <- Nils.seurat[[i]]$SampleID
+    
+    # set default assay 
+    DefaultAssay(Nils.seurat[[i]]) <- "RNA"
+    
+  }
+  
+  
+  # Add mitochondrial and ribosomal gene percentages
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = Add_Mito_Ribo_Seurat, 
+                        species = "Mouse") 
+  
+  # Add cell complexity/novelty QC metric
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = Add_Cell_Complexity_Seurat) 
+  
+  
+  
+  
+  # create cutoff dataframe for easy plotting and interation 
+  
+  cutoff.df <- as.data.frame(matrix(nrow = 2, ncol = 7))
+  
+  colnames(cutoff.df) <- c("feature_low", "feature_high", "umi_low", "umi_low", "mito_high", "ribo_high", "complexity_high")
+  
+  rownames(cutoff.df) <- c("CD45Neg", "CD45Pos")
+  # Setting cutoff values 
+  cutoff.df$feature_low <- c(200, 200)
+  cutoff.df$feature_high <- c(5500, 5500)
+  cutoff.df$umi_low <- c(1000, 1000)
+  cutoff.df$umi_high <- c(45000, 45000)
+  cutoff.df$mito_high <- c(10, 10)
+  cutoff.df$ribo_high <- c(10, 6)
+  cutoff.df$complexity_high <- c(0.75, 0.8)
+  
+  
+  # note ribo high is maybe better called ribo low, its the lower bound 
+  # same with complexity high, should be complexity low, its the lower bound of complexity 
+  
+  
+  ########################
+  # QC plots
+  ########################
+  if(do.plot){
+    
+    for(i in seq_along(names(Nils.seurat))){
+      # nFeatures
+      print(
+        QC_Plots_Genes(seurat_object = Nils.seurat[[i]], 
+                       low_cutoff = cutoff.df$feature_low[i], 
+                       high_cutoff = cutoff.df$feature_high[i],
+                       pt.size = 0.05) #how many genes per cell? See where to set the cutoffs later
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_genes.pdf"))
+      dev.off()
+      
+      
+      # UMI
+      print(
+        QC_Plots_UMIs(seurat_object = Nils.seurat[[i]], 
+                      low_cutoff = cutoff.df$umi_low[i], 
+                      high_cutoff = cutoff.df$umi_high[i], 
+                      y_axis_log = T,
+                      pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_UMI.pdf"))
+      dev.off()
+      
+      
+      # Mito percentage
+      print(
+        QC_Plots_Mito(seurat_object = Nils.seurat[[i]], 
+                      high_cutoff = cutoff.df$mito_high[i],
+                      pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_mito.pdf"))
+      dev.off()
+      
+      
+      # Ribo percentage
+      print(
+        QC_Plots_Feature(seurat_object = Nils.seurat[[i]],
+                         feature = "percent_ribo",
+                         high_cutoff = cutoff.df$ribo_high[i],
+                         pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_Ribo.pdf"))
+      dev.off()
+      
+      
+      # Complexity
+      print(
+        QC_Plots_Complexity(seurat_object = Nils.seurat[[i]], 
+                            high_cutoff = cutoff.df$complexity_high[i],
+                            pt.size = 0.05)
+      ) 
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_complexity.pdf"))
+      dev.off()
+      
+    }
+    
+  }
+  
+  
+  # note there is lots of ribo low cells in cd45pos PDS dataset this is where most cells will be lost
+  
+  # Filter dataset
+  
+  for(i in seq_along(names(Nils.seurat))){
+    
+    Nils.seurat[[i]] <- subset(Nils.seurat[[i]], 
+                               subset = nFeature_RNA > cutoff.df$feature_low[i] & 
+                                 nFeature_RNA < cutoff.df$feature_high[i] & 
+                                 percent_mito < cutoff.df$mito_high[i] & 
+                                 percent_ribo > cutoff.df$ribo_high[i] & 
+                                 log10GenesPerUMI > cutoff.df$complexity_high[i])
+    
+  }
+  
+  
+  
+  if(do.plot){
+    
+    for(i in seq_along(names(Nils.seurat))){
+      # nFeatures
+      print(
+        QC_Plots_Genes(seurat_object = Nils.seurat[[i]], 
+                       low_cutoff = cutoff.df$feature_low[i], 
+                       high_cutoff = cutoff.df$feature_high[i],
+                       pt.size = 0.05) #how many genes per cell? See where to set the cutoffs later
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_genes_filtered.pdf"))
+      dev.off()
+      
+      
+      # UMI
+      print(
+        QC_Plots_UMIs(seurat_object = Nils.seurat[[i]], 
+                      low_cutoff = cutoff.df$umi_low[i], 
+                      high_cutoff = cutoff.df$umi_high[i], 
+                      y_axis_log = T,
+                      pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_UMI_filtered.pdf"))
+      dev.off()
+      
+      
+      # Mito percentage
+      print(
+        QC_Plots_Mito(seurat_object = Nils.seurat[[i]], 
+                      high_cutoff = cutoff.df$mito_high[i],
+                      pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_mito_filtered.pdf"))
+      dev.off()
+      
+      
+      # Ribo percentage
+      print(
+        QC_Plots_Feature(seurat_object = Nils.seurat[[i]],
+                         feature = "percent_ribo",
+                         high_cutoff = cutoff.df$ribo_high[i],
+                         pt.size = 0.05)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_Ribo_filtered.pdf"))
+      dev.off()
+      
+      
+      # Complexity
+      print(
+        QC_Plots_Complexity(seurat_object = Nils.seurat[[i]], 
+                            high_cutoff = cutoff.df$complexity_high[i],
+                            pt.size = 0.05)
+      ) 
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_complexity_filtered.pdf"))
+      dev.off()
+      
+    }
+    
+  }
+  
+  Nils.seurat$CD45Neg  # 32,285 features by 12,407 cells
+  Nils.seurat$CD45Pos # 32,285 features by 13,511 cells
+  
+  table(Nils.seurat$CD45Neg@meta.data$Treatment) # 7,100 PDS and 5,307 Vehicle
+  
+  table(Nils.seurat$CD45Pos@meta.data$Treatment) # 4,869 PDS and 8,642 Vehicle
+  
+  
+  
+}
+
+
+```
+
+
+## Normalisation and integration {.tabset}
+
+## Normalise & integrate data
+```{r Normalise_and_integrate_data}
+
+if(long.compute){
+  
+  # Note, 
+  # I compared CCA integration and rpca integration, looks cca is better fit for this dataset 
+  # also see documentation on cca vs rpca integration, cca more aligns with this dataset 
+  
+  # perform sct and default/standard normalisation before cca integration to compare both normalisation methods 
+  
+  
+  #################################################################################
+  # quick prediction of cell annotations, useful to assess integration
+  #################################################################################
+  
+  # run azimuth only for CD45 compartment 
+  
+  
+  # load library
+  library("Azimuth")
+  
+  # set default assay
+  DefaultAssay(Nils.seurat$CD45Pos) <- "RNA"
+  
+  # Run azimuth
+  Nils.seurat$CD45Pos <- RunAzimuth(Nils.seurat$CD45Pos, reference = "pbmcref")
+  
+  
+  Nils.seurat$CD45Pos@meta.data$predicted.celltype.l1
+  
+  # visualise results 
+  DimPlot(Nils.seurat$CD45Pos, reduction = "umap.cca.sct", group.by = "predicted.celltype.l1")
+  DimPlot(Nils.seurat$CD45Pos, reduction = "umap.cca.sct", group.by = "predicted.celltype.l2")
+  
+  
+  
+  # split object up based on sequencing run / in seurat V5 these are splitting the layers
+  Nils.seurat$CD45Neg[["RNA"]] <- split(Nils.seurat$CD45Neg[["RNA"]],  f = Nils.seurat$CD45Neg$SampleID)
+  Nils.seurat$CD45Pos[["RNA"]] <- split(Nils.seurat$CD45Pos[["RNA"]],  f = Nils.seurat$CD45Pos$SampleID)
+  
+  
+  
+  use.sct <- TRUE
+  
+  
+  if(use.sct){
+    
+    #####################################################
+    # Normalise with scTransform and integrate data
+    #####################################################
+    # note error with more recent version of matrixStats resulting in "useNames = NA is defunct" error. downgrade to matrixStats version 1.1.0 as a workaround
+    # https://github.com/satijalab/seurat/issues/7501#issuecomment-1854571904
+    #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts  
+    
+    DefaultAssay(Nils.seurat[[1]]) <- "RNA"
+    DefaultAssay(Nils.seurat[[2]]) <- "RNA"
+    
+    # note RNA assay is split into run level layers, below script will apply normalisation etc layer-wise
+    
+    # Normalise and scale with SCTransform v2
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = SCTransform, 
+                          method = "glmGamPoi", 
+                          vars.to.regress = "percent_mito", 
+                          vst.flavor = "v2",
+                          verbose = TRUE)
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunPCA, 
+                          reduction.name = "pca_sct")
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunUMAP, 
+                          reduction = "pca_sct", 
+                          dims = 1:30, 
+                          reduction.name = "umap.unintegrated.sct")
+    
+    
+    DefaultAssay(Nils.seurat[[1]]) <- "SCT"
+    DefaultAssay(Nils.seurat[[2]]) <- "SCT"
+    
+    
+    # integrate layers using cca integration
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = IntegrateLayers, 
+                          orig.reduction = "pca_sct",
+                          new.reduction = "integrated.cca.sct",
+                          method = CCAIntegration,
+                          normalization.method = "SCT",
+                          verbose = F)
+    
+    
+    
+    # find clusters and dim reduction using integrated data
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindNeighbors, 
+                          dims = 1:30,
+                          reduction = "integrated.cca.sct")
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindClusters, 
+                          resolution = 1.5, 
+                          cluster.name = "clusters_cca_sct")
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunUMAP, 
+                          reduction = "integrated.cca.sct",
+                          dims = 1:30, 
+                          reduction.name = "umap.cca.sct")
+    
+    
+    
+  }else{
+    
+    
+    ############################
+    # standard normalisation 
+    ############################
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = NormalizeData)
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindVariableFeatures)
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = ScaleData)
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunPCA, 
+                          reduction.name = "pca")
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunUMAP, 
+                          reduction = "pca", 
+                          dims = 1:30, 
+                          reduction.name = "umap.unintegrated")
+    
+    
+    
+    
+    # # integrate layers using cca integration
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = IntegrateLayers, 
+                          method = CCAIntegration,
+                          orig.reduction = "pca",
+                          new.reduction = "integrated.cca",
+                          verbose = FALSE)
+    
+    
+    # # find clusters and dim reduction using integrated data
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindNeighbors, 
+                          reduction = "integrated.cca",
+                          dims = 1:30)
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindClusters, 
+                          resolution = 1.5,
+                          cluster.name = "clusters_cca")
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = RunUMAP, 
+                          reduction = "integrated.cca",
+                          dims = 1:30, 
+                          reduction.name = "umap.cca")
+    
+    
+    
+    Nils.seurat$CD45Neg[["RNA"]] <- JoinLayers(Nils.seurat$CD45Neg[["RNA"]],  assay = "RNA")
+    Nils.seurat$CD45Pos[["RNA"]] <- JoinLayers(Nils.seurat$CD45Pos[["RNA"]],  assay = "RNA")
+    
+  }
+  
+  
+  
+  
+}
+
+
+```
+
+
+
+
+## evaluate integration 
+
+```{r eval_integration}
+
+if(do.plot){
+  
+  # create output dir
+  output.dir <- paste0("results/integration/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  if(use.sct){
+    
+    unintegrated.reduction <- "umap.unintegrated.sct"
+    integrated.reduction <- "umap.cca.sct"
+    title.var <- "SCT"
+  }else{
+    
+    unintegrated.reduction <- "umap.unintegrated"
+    integrated.reduction <- "umap.cca"
+    title.var <- "Standard"
+    
+  }
+  
+  
+  # evaluate integration and dim reduction
+  
+  # set default assay
+  DefaultAssay(Nils.seurat[[1]]) <- "SCT"
+  DefaultAssay(Nils.seurat[[2]]) <- "SCT"
+  
+  Nils.seurat$CD45Pos@meta.data
+  
+  
+  
+  
+  for(j in seq_along(names(Nils.seurat))){
+    
+    if(names(Nils.seurat)[j] == "CD45Pos"){
+      vars.plot <- c("Treatment", "SampleID", "seurat_clusters", "predicted.celltype.l1", "predicted.celltype.l2")
+      
+    }else{
+      
+      vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
+      
+    }
+    
+    
+    for(i in seq_along(vars.plot)){
+      
+      
+      # remove "." from name
+      name.var <- gsub("\\.", "_", vars.plot[i])
+      
+      before.int <- DimPlot(Nils.seurat[[j]],
+                            reduction = unintegrated.reduction, 
+                            label = T,
+                            group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("Unintegrated ", title.var, " Normalisation"))
+      
+      after.int <- DimPlot(Nils.seurat[[j]],
+                           reduction = integrated.reduction, 
+                           label = T,
+                           group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("CCA Integration using ", title.var, " Normalisation"))
+      
+      print(before.int | after.int)
+      dev.copy(pdf, paste0(output.dir, "UMAP_before_after_integration_", name.var, "_", names(Nils.seurat)[j], "_dataset.pdf"))
+      dev.off()
+      
+      
+      
+    }
+  }
+  
+  
+}
+
+```
+
+
+
+
+
+### Save seurat object
+```{r save_seurat_object}
+
+if(long.compute){
+  
+  library("SeuratDisk")
+  
+  
+  # unsure why but error in trying to save as h5Seurat object
+  
+  # export and save seurat object
+  # SaveH5Seurat(Nils.seurat$CD45Pos,
+  #              filename = "saves/Nils_seurat_CD45Pos.h5Seurat",
+  #              overwrite = TRUE, 
+  #              verbose = TRUE)
+  # 
+  # SaveH5Seurat(Nils.seurat$CD45Neg,
+  #              filename = "saves/Nils_seurat_CD45Neg.h5Seurat",
+  #              overwrite = TRUE, 
+  #              verbose = TRUE)
+  # 
+  
+  
+  SaveSeuratRds(Nils.seurat$CD45Pos, 
+                file = "saves/Nils_seurat_CD45Pos.rds")
+  
+  SaveSeuratRds(Nils.seurat$CD45Neg, 
+                file = "saves/Nils_seurat_CD45Neg.rds")
+  
+}
+
+```
+
+
+
+
+## Cluster identification and UMAP optimisation {.tabset}
+
+
+### Cluster optimisation
+```{r Cluster_optimisation}
+
+
+if(long.compute){
+  
+  
+  # create output dir
+  output.dir <- paste0("results/Cluster_optimisation/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  
+  Graphs(Nils.seurat$CD45Neg, slot = NULL)
+  Neighbors(Nils.seurat$CD45Neg, slot = NULL)
+  Reductions(Nils.seurat$CD45Neg, slot = NULL)
+  
+  # set assay 
+  DefaultAssay(Nils.seurat[[1]]) <- "SCT"
+  DefaultAssay(Nils.seurat[[2]]) <- "SCT"
+  
+  
+  # Set seed for reproducibility
+  set.seed(42)
+  
+  # Calculate neighbours graph using integrated data reduction 
+  # this was previously calculated as part of normalisation and integration code chunk, but put here for clarity and to ensure neighbour graph is calculated on correct integrated dataset
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = FindNeighbors, 
+                        dims = 1:30,
+                        reduction = "integrated.cca.sct")
+  
+  
+  # explicitly use the SCT_snn graph calculated for finding clusters 
+  
+  
+  # Find clusters over an iteration of resolutions
+  res.var <- 0
+  
+  while (res.var <= 1.5) {
+    
+    
+    Nils.seurat <- lapply(Nils.seurat, 
+                          FUN = FindClusters, 
+                          resolution = res.var, 
+                          graph.name = "SCT_snn")  
+    res.var = res.var + 0.1
+  }
+  
+  # Use clustree package to visualise impact of cluster resolution on clusters determined
+  
+  #install.packages("clustree")
+  library(clustree) # clusttree needs to be loaded, error occurs if just call function from namespace
+  
+  head(Nils.seurat[[2]][[]])
+  
+  for(i in seq_along(names(Nils.seurat))){
+    
+    print(
+      clustree::clustree(Nils.seurat[[i]], 
+                         prefix = "SCT_snn_res.",
+                         layout = "sugiyama")
+    )
+    dev.copy(pdf, paste0(output.dir, "dataset_", names(Nils.seurat)[i], "_clusttree.pdf"))
+    dev.off()
+    
+    
+  }
+  
+  
+  # note resolution of 1.3 looks relatively ok for both datasets 
+  # will use this until further annotation of clusters and refinement is done
+  
+  # set seurat clusters to this level 
+  Nils.seurat[[1]]@meta.data$seurat_clusters <- Nils.seurat[[1]]@meta.data$SCT_snn_res.1.3
+  Nils.seurat[[2]]@meta.data$seurat_clusters <- Nils.seurat[[2]]@meta.data$SCT_snn_res.1.3
+  
+  length(unique(Nils.seurat[[1]]@meta.data$seurat_clusters)) # 27 clusters
+  length(unique(Nils.seurat[[2]]@meta.data$seurat_clusters)) # 31 clusters
+  
+  
+  
+  # Visualise clusters on UMAP projection 
+  DimPlot(Nils.seurat$CD45Pos,
+          reduction = "umap.cca.sct", 
+          label = T,
+          group.by = c("seurat_clusters")) + 
+    NoLegend() + 
+    ggtitle("SCT_snn_res.1.5")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_CD45Pos_dataset_seurat_clusters.pdf"))
+  dev.off()
+  
+  
+  DimPlot(Nils.seurat$CD45Neg,
+          reduction = "umap.cca.sct", 
+          label = T,
+          group.by = c("seurat_clusters")) + 
+    NoLegend() + 
+    ggtitle("SCT_snn_res.1.5")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_CD45Neg_dataset_seurat_clusters.pdf"))
+  dev.off()
+  
+}
+
+
+
+
+```
+
+```{r umap_optimisation}
+
+
+if(long.compute){
+  
+  
+  # create output dir
+  output.dir <- paste0("results/UMAP_optimisation/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  
+  
+  
+  # Optimise UMAP projection 
+  
+  # set init conditions and step sizes
+  init.min.dist = 0.001
+  init.neigh = 5
+  min.dist.step = 2 
+  neigh.step = 20
+  
+  
+  
+  for(i in seq_along(names(Nils.seurat))){
+    
+    if(names(Nils.seurat)[i] == "CD45Pos"){
+      
+      grouping.var <- "predicted.celltype.l2"
+      
+    }else{
+      
+      grouping.var <- "seurat_clusters"
+      
+    }
+    min.dist.val <- init.min.dist
+    
+    # start loop 
+    while (min.dist.val < 1) {
+      
+      n.neigh.val <- init.neigh
+      
+      while (n.neigh.val <= 50) {
+        
+        print(paste0("Calculating UMAP for min.dist = ", 
+                     min.dist.val, " & n.neighbor = ", n.neigh.val))
+        
+        # caculate UMAP
+        temp <- Seurat::RunUMAP(object = Nils.seurat[[i]],
+                                reduction = "integrated.cca.sct", 
+                                dims = 1:30,
+                                n.neighbors = n.neigh.val, 
+                                min.dist = min.dist.val,
+                                reduction.name = "umap.temp",
+                                seed.use = 42)
+        
+        # print UMAP
+        p1 <- Seurat::DimPlot(object = temp, 
+                              reduction = "umap.temp", 
+                              label = TRUE, 
+                              label.size = 4, 
+                              group.by = grouping.var) + 
+          ggtitle(paste0(grouping.var, " UMAP Min dist = ", 
+                         min.dist.val, " n.val = ", n.neigh.val)) +
+          NoLegend()
+        
+        
+        
+        print(p1)
+        
+        dev.copy(pdf, 
+                 paste0(output.dir,  names(Nils.seurat)[i], 
+                        "_UMAP_Min_dist_", min.dist.val, "_neighval_", n.neigh.val, ".pdf"))
+        dev.off()
+        
+        n.neigh.val <- n.neigh.val + neigh.step
+      }
+      min.dist.val <- min.dist.val * min.dist.step
+    }
+    
+    
+  }
+  
+  
+  
+  # calculate UMAP using default params 
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = RunUMAP,
+                        reduction = "integrated.cca.sct",
+                        dims = 1:30)
+  
+}
+
+
+```
+
+### Save seurat object
+```{r save_seurat_object_2}
+
+if(long.compute){
+  
+  library("SeuratDisk")
+  
+  
+  # unsure why but error in trying to save as h5Seurat object
+  
+  # export and save seurat object
+  # SaveH5Seurat(Nils.seurat$CD45Pos,
+  #              filename = "saves/Nils_seurat_CD45Pos.h5Seurat",
+  #              overwrite = TRUE, 
+  #              verbose = TRUE)
+  # 
+  # SaveH5Seurat(Nils.seurat$CD45Neg,
+  #              filename = "saves/Nils_seurat_CD45Neg.h5Seurat",
+  #              overwrite = TRUE, 
+  #              verbose = TRUE)
+  # 
+  
+  
+  SaveSeuratRds(Nils.seurat$CD45Pos, 
+                file = "saves/Nils_seurat_CD45Pos.rds")
+  
+  SaveSeuratRds(Nils.seurat$CD45Neg, 
+                file = "saves/Nils_seurat_CD45Neg.rds")
+  
+}
+
+```
+
+
+### Broad overview of dataset
+```{r broad_overview}
+
+if(do.plot){
+  
+  
+  # create output dir
+  output.dir <- paste0("results/overview_visualisation/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  
+  for(i in seq_along(names(Nils.seurat))){
+    
+    
+    
+    # set assay
+    DefaultAssay(Nils.seurat[[i]]) <- "SCT"
+    
+    if(names(Nils.seurat)[i] == "CD45Pos"){
+      vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters", "predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3")
+    }else{
+      
+      vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters")
+      
+    }
+    for(j in seq_along(vars.to.plot)){
+      name.var <- gsub("\\.", "_", vars.to.plot[j])
+      
+      print(
+        scCustomize::DimPlot_scCustom(Nils.seurat[[i]],
+                                      reduction = "umap", 
+                                      label = TRUE,
+                                      figure_plot = TRUE,
+                                      group.by = vars.to.plot[j]) 
+      )
+      
+      
+      dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_UMAP_", name.var, ".pdf"))
+      dev.off()
+      
+    }
+    
+  }
+  
+  
+  
+  
+  
+  
+  
+}
+
+
+```
+
+
+
+## CD45Neg dataset analysis {.tabset}
+
+
+## Cluster annotation CD45Neg dataset
+```{r CD45Neg_data_cluster_annotation}
+
+
+output.dir <- "results/CD45Neg_SingleR/"
+
+# Create output directory
+if(!dir.exists(paste0(output.dir))){
+  dir.create(paste0(output.dir), 
+             recursive = T)
+}
+
+
+# load required packages
+library("SingleR")
+library("celldex")
+
+################################################################
+# Use a couple databased to get broad overview of clusters 
+################################################################
+
+# error with collect() when trying to load celldex datasets
+# possibly due to error in dbplyr, ensure version 2.3.4 
+
+# need to downgrade to this version 
+#devtools::install_version("dbplyr", version = "2.3.4")
+#devtools::install_version("dbplyr", version = "2.4")
+
+library(BiocManager) # 3.16
+install("BiocFileCache")
+install("BiocManager")
+
+##################################
+# Use HumanPrimaryCellAtlasData
+##################################
+# Info: Human, Microarray, 713 samples, 37 main labels, 157 fine lables, Non-specific focus
+
+HumanPrimaryCellAtlasData.data <- celldex::HumanPrimaryCellAtlasData()
+
+ref.mouse <-  celldex::MouseRNAseqData()
+
+
+
+
+# First calcualte cell ID using all available labels
+SingleR.pred <- SingleR(test = seurat.combined@assays$integrated@data, 
+                        ref = HumanPrimaryCellAtlasData.data, 
+                        method = "cluster",
+                        clusters = seurat.combined@meta.data$seurat_clusters,
+                        labels = HumanPrimaryCellAtlasData.data$label.fine)
+
+# Plot 
+plotScoreHeatmap(SingleR.pred, 
+                 show_colnames = TRUE)
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_all_labels_HumanPrimaryCellAtlasData_db.pdf"))
+dev.off()
+
+##########################
+# Use BlueprintEncodeData
+##########################
+# Info: Human, RNAseq, 259 samples, 24 main labels, 43 fine lables, Non-specific focus
+
+BlueprintEncodeData.data <- celldex::BlueprintEncodeData()
+
+
+# First calcualte cell ID using all available labels
+SingleR.pred <- SingleR(test = seurat.combined@assays$integrated@data, 
+                        ref = BlueprintEncodeData.data, 
+                        method = "cluster",
+                        clusters = seurat.combined@meta.data$seurat_clusters,
+                        labels = BlueprintEncodeData.data$label.fine)
+
+# Plot 
+plotScoreHeatmap(SingleR.pred, 
+                 show_colnames = TRUE)
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_all_labels_BlueprintEncodeData_db.pdf"))
+dev.off()
+
+
+
+##########################################
+# Use NovershternHematopoieticData
+##########################################
+# Info: Human, Microarray, 211 samples, 17 main labels, 38 fine lables, Hematopoietic & Immune focus
+
+NovershternHematopoieticData.data <- celldex::NovershternHematopoieticData()
+
+
+# First calcualte cell ID using all available labels
+SingleR.pred <- SingleR(test = seurat.combined@assays$integrated@data, 
+                        ref = NovershternHematopoieticData.data, 
+                        method = "cluster",
+                        clusters = seurat.combined@meta.data$seurat_clusters,
+                        labels = NovershternHematopoieticData.data$label.fine)
+
+
+# Plot 
+plotScoreHeatmap(SingleR.pred, 
+                 show_colnames = TRUE)
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_all_labels_NovershternHematopoietic_db.pdf"))
+dev.off()
+
+
+#####################
+# Use ImmGenData
+#####################
+# Info: Mouse, Microarray, 830 samples, 20 main labels, 253 fine lables, Hematopoietic & Immune focus
+
+ImmGen.data <- celldex::ImmGenData()
+
+# Convert GeneID to match human
+ImmGen.data.counts <- ImmGen.data@assays@data$logcounts
+rownames(ImmGen.data.counts) <- toupper(rownames(ImmGen.data.counts))
+
+
+# First calcualte cell ID using all available labels
+SingleR.pred <- SingleR(test = seurat.combined@assays$integrated@data, 
+                        ref = ImmGen.data.counts, 
+                        method = "cluster",
+                        clusters = seurat.combined@meta.data$seurat_clusters,
+                        labels = ImmGen.data$label.fine)
+
+
+# Plot 
+plotScoreHeatmap(SingleR.pred, 
+                 show_colnames = TRUE)
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_all_labels_ImmGen_db.pdf"))
+dev.off()
+
+
+################################################################
+# Most useful database is probably the MonacoImmuneData
+################################################################
+
+#########################
+# Use MonacoImmuneData
+#########################
+# Info: Human, RNAseq, 114 samples, 11 main labels, 29 fine lables, Immune cell focus
+Immune.data <- celldex::MonacoImmuneData()
+
+
+# First calcualte cell ID using all available labels
+SingleR.pred <- SingleR(test = seurat.combined@assays$integrated@data, 
+                        ref = Immune.data, 
+                        method = "cluster",
+                        clusters = seurat.combined@meta.data$seurat_clusters,
+                        labels = Immune.data$label.fine)
+
+
+# Plot 
+plotScoreHeatmap(SingleR.pred, 
+                 show_colnames = TRUE)
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_all_labels_Monaco_db.pdf"))
+dev.off()
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+
+
+
+# quantify cluster distribution and associations
+
+
+sample.sum <- table(HL.seurat@meta.data$SampleID)
+temp.df <- table(HL.seurat@meta.data$predicted.celltype.l1, HL.seurat@meta.data$SampleID)
+
+percent.sample.val <- sweep(temp.df, 2, sample.sum, FUN = "/")
+
+percent.sample.val <- percent.sample.val*100
+# sanity check 
+colSums(percent.sample.val)
+
+
+ggplot(percent.sample.val) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs(x = "SampleID", y = "Frequency", title = "Frequency of SampleID in each Celltype.l1") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  facet_wrap(vars(Var1), ncol = 2L)
+
+
+
+dev.copy(pdf, paste0(output.dir, "Barplot_frequency_of_sampleID_by_celltype_l1.pdf"))
+dev.off()
+
+
+
+
+disease.sum <- table(HL.seurat@meta.data$DiseaseStatus)
+temp.df <- table(HL.seurat@meta.data$predicted.celltype.l1, HL.seurat@meta.data$DiseaseStatus)
+
+percent.disease.val <- sweep(temp.df, 2, disease.sum, FUN = "/")
+
+percent.disease.val <- percent.disease.val*100
+# sanity check 
+colSums(percent.disease.val)
+
+
+ggplot(percent.disease.val) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs(x = "Disease Status", y = "Frequency", title = "Frequency of Disease status in each Celltype.l1") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  facet_wrap(vars(Var1), ncol = 2L, scales = "free_y")
+
+
+
+dev.copy(pdf, paste0(output.dir, "Barplot_frequency_of_disease_status_by_celltype_l1.pdf"))
+dev.off()
+
+
+
+
+
+cluster.sum <- table(HL.seurat@meta.data$seurat_clusters)
+temp.df <- table(HL.seurat@meta.data$predicted.celltype.l1, HL.seurat@meta.data$seurat_clusters)
+
+percent.cluster.val <- sweep(temp.df, 2, cluster.sum, FUN = "/")
+
+percent.cluster.val <- percent.cluster.val*100
+# sanity check 
+colSums(percent.cluster.val)
+
+
+ggplot(percent.cluster.val) +
+  aes(x = factor(Var2, levels = colnames(percent.cluster.val)), y = Freq, fill = Var1) +
+  geom_col() +
+  scale_fill_brewer(palette = "Accent", 
+                    direction = 1) +
+  labs(x = "Seurat Clusters", y = "Frequency of cluster", title = "Frequency of cluster according to predicted cell type .l1", 
+       fill = "Predicted cell type") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+dev.copy(pdf, paste0(output.dir, "Barplot_frequency_of_seurat_clusters_by_celltype_l1.pdf"))
+dev.off()
+
+
+
+
+
+cluster.sum <- table(HL.seurat@meta.data$seurat_clusters)
+temp.df <- table(HL.seurat@meta.data$predicted.celltype.l2, HL.seurat@meta.data$seurat_clusters)
+
+percent.cluster.val <- sweep(temp.df, 2, cluster.sum, FUN = "/")
+
+percent.cluster.val <- percent.cluster.val*100
+# sanity check 
+colSums(percent.cluster.val)
+
+
+nrow(percent.cluster.val) # 29 cell.type variables 
+
+
+# Assuming each group of 4 rows should be displayed on a separate page
+group_size <- 4
+total_rows <- nrow(percent.cluster.val)
+seq.var <- seq(1, total_rows, by = group_size)
+seq.var <- seq.var[-length(seq.var)]
+
+# Iterate over groups of 4 rows
+for (start_row in seq.var) {
+  end_row <- min(start_row + group_size - 1, total_rows)
+  temp.df <- percent.cluster.val[start_row:end_row, ]
+  
+  print(
+    ggplot(temp.df) +
+      aes(x = factor(Var2, levels = colnames(temp.df)), y = Freq, fill = Var1) +
+      geom_col() +
+      labs(x = "Seurat Clusters", y = "Frequency of cluster", 
+           title = "Frequency of cluster according to predicted cell type .l1", 
+           fill = "Predicted cell type") +
+      theme_minimal() +
+      theme(legend.position = "none") +
+      theme(plot.title = element_text(hjust = 0.5)) + 
+      facet_wrap(vars(Var1), ncol = 2, scales = "free_y")
+  )
+  # Optionally, save the plots to different files
+  ggsave(paste0(output.dir, "Barplot_", start_row, "_to_", end_row, ".png"), width = 8, height = 4)
+}
+
+
+
+```
+
+
+### Differential gene expression
+```{r DEG_analysis}
+
+
+
+
+
+# create output dir
+output.dir <- paste0("results/DEG_analysis/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+
+HL.seurat <- PrepSCTFindMarkers(HL.seurat)
+
+# set assay
+DefaultAssay(HL.seurat) <- "RNA"
+
+# create annotation for celltype and disease status 
+HL.seurat@meta.data$celltype_l1_disease <- paste(HL.seurat@meta.data$predicted.celltype.l1, HL.seurat@meta.data$DiseaseStatus, sep = "_")
+
+
+Idents(HL.seurat) <- "celltype_l1_disease"
+DefaultAssay(HL.seurat) <- "RNA"
+
+NK.de <- FindMarkers(HL.seurat, ident.1 = "CD8 T_Healthy", ident.2 = "CD8 T_Patient", assay = "RNA", verbose = FALSE)
+
+
+NK.de %>%
+  filter(p_val_adj < 0.05) %>%
+  top_n(10, avg_log2FC)
+
+
+
+DefaultAssay(HL.seurat) <- "SCT"
+
+NK.de.sct <- FindMarkers(HL.seurat, ident.1 = "CD8 T_Healthy", ident.2 = "CD8 T_Patient", assay = "SCT", verbose = FALSE)
+
+
+NK.de.sct %>%
+  filter(p_val_adj < 0.05) %>%
+  top_n(10, avg_log2FC)
+
+
+
+norm.de <- NK.de %>%
+  filter(p_val_adj < 0.05) %>%
+  filter(avg_log2FC > 0)
+
+
+sct.de <- NK.de.sct %>%
+  filter(p_val_adj < 0.05) %>%
+  filter(avg_log2FC > 0)
+
+
+
+
+
+temp.logic <- rownames(sct.de) %in% rownames(norm.de)
+temp.logic <- rownames(norm.de) %in% rownames(sct.de)
+
+rownames(norm.de)[!temp.logic]
+
+
+
+DefaultAssay(HL.seurat) <- "SCT"
+
+Idents(HL.seurat) <- "celltype_l1_disease"
+
+temp.seurat <- subset(HL.seurat, idents = c("CD8 T_Healthy", "CD8 T_Patient"))
+temp.seurat <- subset(temp.seurat, downsample = 300)
+temp.seurat <- ScaleData(temp.seurat, features =  unique(c(rownames(sct.de), rownames(norm.de))))
+
+goi <- unique(c(rownames(sct.de), rownames(norm.de)))
+DoHeatmap(temp.seurat, features = rownames(norm.de))
+
+
+
+
+names(NK.de.sct) <- paste0(names(NK.de.sct), ".sct")
+NK.de.sct$gene <- rownames(NK.de.sct)
+
+names(NK.de) <- paste0(names(NK.de), ".norm")
+NK.de$gene <- rownames(NK.de)
+
+merge_dat <- merge(NK.de.sct, NK.de, by = "gene")
+merge_dat <- merge_dat[order(merge_dat$p_val_adj.sct), ]
+
+# Number of genes that are marginally significant in both; marginally significant only in bulk; and marginally significant only in single-cell
+common <- merge_dat$gene[which(merge_dat$p_val_adj.sct < 0.05 & 
+                                 merge_dat$p_val_adj.norm < 0.05)]
+only_norm <- merge_dat$gene[which(merge_dat$p_val_adj.sct > 0.05 & 
+                                    merge_dat$p_val_adj.norm < 0.05)]
+only_sct <- merge_dat$gene[which(merge_dat$p_val_adj.sct < 0.05 & 
+                                   merge_dat$p_val_adj.norm > 0.05)]
+print(paste0('# Common: ',length(common)))
+print(paste0('# Only in norm: ',length(only_norm)))
+print(paste0('# Only in sct: ',length(only_sct)))
+
+merge_dat %>%
+  filter(gene %in% only_norm) %>%
+  arrange(desc(avg_log2FC.norm))
+
+
+DefaultAssay(HL.seurat) <- "RNA"
+
+Idents(HL.seurat) <- "celltype_l1_disease"
+
+temp.seurat <- subset(HL.seurat, idents = c("CD8 T_Healthy", "CD8 T_Patient"))
+
+RidgePlot(temp.seurat, features = "NUCKS1")
+
+
+
+VlnPlot(temp.seurat, features = "NUCKS1", group.by = "celltype_l1_disease") 
+
+
+
+DefaultAssay(HL.seurat) <- "SCT"
+Idents(HL.seurat) <- "predicted.celltype.l1"
+
+conserved.sct <- FindConservedMarkers(HL.seurat, ident.1 = "CD8 T", grouping.var = "DiseaseStatus", assay = "SCT", verbose = FALSE)
+
+
+sct.de <- conserved.sct %>%
+  filter(p_val_adj < 0.05) %>%
+  filter(avg_log2FC > 0)
+
+
+
+# perform pseudobulk DEG analysis 
+
+# pseudobulk the counts based on donor-condition-celltype
+pseudo.HL <- AggregateExpression(HL.seurat, assays = "SCT", return.seurat = T, group.by = c("SampleID", "DiseaseStatus", "predicted.celltype.l1"))
+
+# each 'cell' is a donor-condition-celltype pseudobulk profile
+tail(Cells(pseudo.HL))
+
+pseudo.HL@meta.data$celltype_l1_disease <- paste(pseudo.HL@meta.data$predicted.celltype.l1, pseudo.HL@meta.data$DiseaseStatus, sep = "_")
+
+Idents(pseudo.HL) <- "celltype_l1_disease"
+
+
+bulk.nk.de <- FindMarkers(object = pseudo.HL, 
+                          ident.1 = "CD8 T_Patient", 
+                          ident.2 = "CD8 T_Healthy",
+                          test.use = "DESeq2")
+
+head(bulk.nk.de, n = 15)
+bulk.nk.de %>%
+  filter(p_val_adj < 0.05) %>%
+  top_n(10, avg_log2FC)
+
+
+VlnPlot(HL.seurat, features = "SERPINA1", #idents = c("CD8 T_Patient", "CD8 T_Healthy"), 
+        group.by = "SampleID") 
+
+
+table(HL.seurat@meta.data$predicted.celltype.l1, HL.seurat@meta.data$DiseaseStatus)
+
+DimPlot(HL.seurat,
+        reduction = "umap.cca", 
+        split.by = "RunID",
+        group.by = c("RunID"))
+
+DefaultAssay(HL.seurat) <- "SCT"
+VlnPlot(HL.seurat, features = "OTULIN", group.by = "SampleID") 
+
+scCustomize::FeaturePlot_scCustom(HL.seurat, "SERPINA1")
+
+
+DefaultAssay(HL.seurat) <- "RNA"
+
+VlnPlot(HL.seurat, 
+        features = "CD3E", 
+        group.by = "predicted.celltype.l1") + NoLegend()
+
+
+
+
+
+
+
+
+############################################################
+# Evaluate standard normalisation vs SCT normalisation !!!
+
+############################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if(do.plot){
+  
+}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+### Differential Abundance
+```{r}
+
+
+
+
+
+
+
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "percent_mito", reduction = "umap.cca.sct")
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "percent_ribo", reduction = "umap.cca.sct")
+
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "nCount_RNA", reduction = "umap.cca.sct")
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "nFeature_RNA", reduction = "umap.cca.sct")
+
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "log10GenesPerUMI", reduction = "umap.cca.sct")
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "mapping.score", reduction = "umap.cca.sct")
+
+
+# cell cycle scoring 
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+
+HL.seurat <- CellCycleScoring(HL.seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+head(HL.seurat@meta.data)
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "S.Score", reduction = "umap.cca.sct")
+scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "G2M.Score", reduction = "umap.cca.sct")
+
+
+table(HL.seurat$hash.ID, HL.seurat$predicted.celltype.l3)
+
+table(HL.seurat$RunID, HL.seurat$predicted.celltype.l3)
+
+
+
+
+
+head(HL.seurat@meta.data)
+unique(HL.seurat@meta.data$DiseaseStatus)
+unique(HL.seurat@meta.data$SampleID)
+unique(HL.seurat@meta.data$DiseaseOutcome)
+
+
+DimPlot(HL.seurat,
+        reduction = "umap.cca.sct", 
+        label = T,
+        group.by = c("DiseaseStatus")) + NoLegend() + ggtitle("clusters_cca_sct")
+
+
+DimPlot(HL.seurat,
+        reduction = "umap.cca.sct", 
+        label = T,
+        group.by = c("SampleID")) + NoLegend() + ggtitle("clusters_cca_sct")
+
+
+DimPlot(HL.seurat,
+        reduction = "umap.cca.sct", 
+        label = T,
+        group.by = c("DiseaseOutcome")) + NoLegend() + ggtitle("clusters_cca_sct")
+
+
+DimPlot(HL.seurat,
+        reduction = "umap.cca.sct", 
+        split.by = c("DiseaseOutcome")) + NoLegend() + ggtitle("clusters_cca_sct")
+
+table(HL.seurat$DiseaseOutcome)
+
+
+
+# Why got NA values in disease outcome
+
+#dev.copy(pdf, paste0(output.dir, "UMAP_before_after_integration_RunID_split.pdf"))
+#dev.off()
+
+
+}
+
+
+
+
+```
+
+
+
+
+
+## normalise ADT dataset
+```{r}
+
+
+if(long.compute){
+  
+  ############################################
+  # Normalise and scale ADT data
+  ############################################  
+  
+  
+  # ensure ADT is the default assay and set variable features to all ADT markers in dataset
+  
+  DefaultAssay(HL.seurat) <- "ADT"
+  
+  VariableFeatures(HL.seurat[["ADT"]]) <- rownames(HL.seurat[["ADT"]])
+  
+  # split ADT assay according to sequencing run
+  HL.seurat[["ADT"]] <- split(HL.seurat[["ADT"]],  f = HL.seurat$RunID)
+  
+  
+  HL.seurat <- NormalizeData(HL.seurat,
+                             normalization.method = "CLR", 
+                             margin = "2", 
+                             assay = "ADT") %>%
+    ScaleData() %>%
+    RunPCA(reduction.name = 'adtPCA_unintegrated') %>%
+    FindNeighbors(reduction = "adtPCA_unintegrated") %>%
+    FindClusters(resolution = 0.8, cluster.name = "adt_unintegrated_clusters") %>%
+    RunUMAP(dims = 1:30, reduction = "adtPCA_unintegrated", reduction.name = "umap.adt.unintegrated")
+  
+  
+  
+  
+}
+
+
+
+
+
+```
+
+
+
+
+
+
+
+```{r}
+
+
+
+
+
+
+
+
+
+
+
+
+# Identify multimodal neighbors. These will be stored in the neighbors slot, 
+# and can be accessed using bm[['weighted.nn']]
+# The WNN graph can be accessed at bm[["wknn"]], 
+# and the SNN graph used for clustering at bm[["wsnn"]]
+# Cell-specific modality weights can be accessed at bm$RNA.weight
+bm <- FindMultiModalNeighbors(
+  bm, reduction.list = list("pca", "apca"), 
+  dims.list = list(1:30, 1:18), modality.weight.name = "RNA.weight"
+)
+
+
+bm <- RunUMAP(bm, nn.name = "weighted.nn", reduction.name = "wnn.umap", reduction.key = "wnnUMAP_")
+bm <- FindClusters(bm, graph.name = "wsnn", algorithm = 3, resolution = 2, verbose = FALSE)
+
+
+p1 <- DimPlot(bm, reduction = 'wnn.umap', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+p2 <- DimPlot(bm, reduction = 'wnn.umap', group.by = 'celltype.l2', label = TRUE, repel = TRUE, label.size = 2.5) + NoLegend()
+p1 + p2
+
+
+
+
+Run.3.seurat <- Azimuth::RunAzimuth(Run.3.seurat, reference = "pbmcref")
+
+
+
+
+
+
+```
+
+
+
+
+
