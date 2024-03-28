@@ -131,23 +131,303 @@ if(quick.load){
   
   CD45pos.seurat <- LoadSeuratRds("saves/Nils_seurat_CD45Pos.rds")
   
+  # set levels for easier downstream plotting 
+  CD45pos.seurat@meta.data$Treatment <- factor(CD45pos.seurat@meta.data$Treatment, levels = c("Vehicle", "PDS"))
+  
 }
 ```
 
 
 
-## DEG calculation and visualisation {.tabset}
 
-### DEG analysis CD45Pos dataset clusters
-```{r DEG_CD45Pos_clusters}
+## Overview of dataset {.tabset}
 
-# note this is a recalculation of what was done in pre-processing script and should not be different for cd45pos dataset, but as some clusters were removed in cd45neg dataset, i am redoing this deg calculation in these dataset specific scripts
-# as a mechanism to explictly overwrite any old data and ensure deg calculations are done on most up-to-date seurat objects
-# poor use of resources and compute time but done for clarity
+### Broad overview of dataset
+```{r broad_overview}
+
+if(do.plot){
+  
+  
+  # create output dir
+  output.dir <- paste0("results/CD45Pos_Overview/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  
+  
+  # set assay
+  DefaultAssay(CD45pos.seurat) <- "SCT"
+  
+  
+  vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters")
+  
+  
+  for(j in seq_along(vars.to.plot)){
+    name.var <- gsub("\\.", "_", vars.to.plot[j])
+    
+    print(
+      scCustomize::DimPlot_scCustom(CD45pos.seurat,
+                                    reduction = "umap", 
+                                    label = TRUE,
+                                    figure_plot = TRUE,
+                                    group.by = vars.to.plot[j]) 
+    )
+    
+    
+    dev.copy(pdf, paste0(output.dir, "CD45Pos_UMAP_", name.var, ".pdf"))
+    dev.off()
+    
+  }
+  
+  
+  # split umap plots
+  print(
+    scCustomize::DimPlot_scCustom(CD45pos.seurat,
+                                  reduction = "umap", 
+                                  label = TRUE,
+                                  figure_plot = TRUE,
+                                  group.by = "seurat_clusters", 
+                                  split.by = "Treatment") 
+  )
+  
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_UMAP_seurat_clusters_split_by_treatment.pdf"))
+  dev.off()
+  
+}
+
+
+```
+
+### Cluster stats
+```{r cluster_stats}
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_Overview/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+#############################################
+# Number of cells per cluster
+#############################################
+
+cluster.n <- table(CD45pos.seurat@meta.data$seurat_clusters)
+
+cluster.n <- as.data.frame(cluster.n)
+cluster.n$Var1 <- factor(cluster.n$Var1, levels = cluster.n$Var1)
+
+
+ggplot(cluster.n) +
+  aes(x = Var1, y = Freq, fill = Var1) +
+  geom_col() +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1) +
+  labs(x = "Cluster ID", y = "Number of cells", title = "Number of cells per cluster") +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+ggsave(paste0(output.dir, "Barplot_number_of_cells_per_cluster.pdf"))
+
+
+#############################################
+# Freq of clusters across treatment 
+#############################################
+
+dist.table <- table(CD45pos.seurat@meta.data$seurat_clusters, CD45pos.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Treatment", y = "% of treatment", title = "Frequency of clusters per treatment") +
+  scale_fill_manual(values = c(Vehicle = "grey", PDS = "darkred")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_clusters_per_treatment.pdf"))
+
+
+```
+
+### Cell Cycle scoring
+```{r cell_cycle}
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_cell_cycle/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+################################
+# Get cell cycle genes 
+################################
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+# pseudo-map to mouse gene (captures most except Mlf1ip, Fam64a and Hn1)
+s.genes <- stringr::str_to_title(s.genes)
+g2m.genes <- stringr::str_to_title(g2m.genes)
+
+#####################
+# score cell cycle
+#####################
+
+CD45pos.seurat <- CellCycleScoring(CD45pos.seurat,
+                                   s.features = s.genes,
+                                   g2m.features = g2m.genes,
+                                   set.ident = TRUE)
+
+
+#####################
+# Visualise score
+#####################
+
+head(CD45pos.seurat@meta.data)
+
+# Feature plots 
+
+# S-score 
+scCustomize::FeaturePlot_scCustom(CD45pos.seurat, 
+                                  feature = "S.Score", 
+                                  reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Pos_S_score.pdf"))
+dev.off()
+
+# G2M-score 
+scCustomize::FeaturePlot_scCustom(CD45pos.seurat, 
+                                  feature = "G2M.Score", 
+                                  reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Pos_G2M_score.pdf"))
+dev.off()
+
+# Dim plot split by phase
+scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+                              group.by = "seurat_clusters",
+                              split.by = "Phase",
+                              label = TRUE,
+                              reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_CD45Pos_cluster_by_phase.pdf"))
+dev.off()
+
+
+# Stacked VlnPlot
+scCustomize::Stacked_VlnPlot(CD45pos.seurat,
+                             features = c("S.Score", "G2M.Score"), 
+                             group.by = "seurat_clusters")
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Pos_cell_cycle.pdf"))
+dev.off()
+
+
+
+
+###################
+# Quantification 
+###################
+
+
+# Frequency of phase per cluster
+dist.table <- table(CD45pos.seurat@meta.data$seurat_clusters, CD45pos.seurat@meta.data$Phase)
+
+cluster.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, cluster.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of cluster", title = "Frequency of phase per cluster") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_cluster.pdf"))
+
+
+# Frequency of phase per treatment
+
+dist.table <- table(CD45pos.seurat@meta.data$Treatment, CD45pos.seurat@meta.data$Phase)
+
+treatment.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of treatment", title = "Frequency of phase per treatment") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_treatment.pdf"))
+
+
+
+```
+
+
+
+## DEG analysis {.tabset}
+
+### Cluster-wise DEGs - calculate
+```{r Clusterwise_DEGs_calculation}
 
 
 # create output dir
-output.dir <- paste0("results/CD45Pos_DEG_analysis/")
+output.dir <- paste0("results/CD45Pos_cluster_wise_DEGs/")
 
 if(!dir.exists(output.dir)){
   dir.create(output.dir, 
@@ -157,6 +437,7 @@ if(!dir.exists(output.dir)){
 
 
 if(long.compute){
+  
   
   CD45pos.seurat <- PrepSCTFindMarkers(CD45pos.seurat)
   
@@ -176,40 +457,53 @@ if(long.compute){
   # save to file 
   write.csv(CD45Pos.de, paste0(output.dir, "CD45Pos_DEGs.csv"))
   
+  
+  
 }else{
   
+  # load DEG table
   CD45Pos.de <- read.csv(paste0(output.dir, "CD45Pos_DEGs.csv"))
-  
   
 }
 
 
-# aggregate expression for heatmap visualisation
 
-pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
+```
 
-
-
-goi <- CD45Pos.de %>%
-  filter(p_val_adj < 0.05) %>%
-  group_by(cluster) %>%
-  top_n(10, avg_log2FC) %>%
-  pull(gene)
-
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_pseudobulk.pdf"))
-dev.off()
-
+### Cluster-wise DEGs - heatmaps
+```{r clusterwise_DEGs_heatmaps}
 
 if(do.plot){
+  # aggregate expression for heatmap visualisation
+  
+  pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
+                                        assays = "SCT",
+                                        return.seurat = TRUE, 
+                                        group.by = c("seurat_clusters"))
+  
+  
+  
+  goi <- CD45Pos.de %>%
+    filter(p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    top_n(10, avg_log2FC) %>%
+    pull(gene)
+  
+  
+  DoHeatmap(pseudo.cd45pos, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_top_10_DEGs_pseudobulk.pdf"))
+  dev.off()
+  
+  
+  
+  
   # iterate over the top degs for each cluster 
   cluster.id <- unique(CD45Pos.de$cluster)
   for(i in seq_along(cluster.id)){
@@ -228,7 +522,10 @@ if(do.plot){
       DoHeatmap(pseudo.cd45pos, 
                 features = goi$gene, 
                 draw.lines = FALSE, 
-                raster = FALSE)
+                raster = FALSE) + 
+        scico::scale_fill_scico(palette = "batlow", 
+                                direction = 1, 
+                                na.value = "white")
     )
     
     dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
@@ -238,24 +535,14 @@ if(do.plot){
   
 }
 
-
-
 ```
- 
- 
- 
- 
-## annotate clusters {.tabset}
 
-```{r annotate_clusters}
 
-########################################################
-# provide annotation for clusters where possible 
-########################################################
-
+### Treatment-wise DEGs - calculate
+```{r Treatmentwise_DEGs_calculation}
 
 # create output dir
-output.dir <- paste0("results/CD45Pos_cluster_vs_azimuth/")
+output.dir <- paste0("results/CD45Pos_treatment_wise_DEGs/")
 
 if(!dir.exists(output.dir)){
   dir.create(output.dir, 
@@ -263,410 +550,59 @@ if(!dir.exists(output.dir)){
   
 }
 
-# compare with azimuth annotation 
 
-# calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-x <- table(CD45pos.seurat@meta.data$predicted.celltype.l1, CD45pos.seurat@meta.data$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y
-
-
-# set a threshold 
-# clusters with greater than this value will become clusterX_Bcell or whatever annotation
-# other clusters are left ambiguous to be decided later
-threshold.limit <- 90
-
-library(ggplot2)
-
-ggplot(y) +
-  aes(x = Var2, y = Freq, fill = Var1) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_hue(direction = 1) +
-  theme_minimal() +
-  facet_wrap(vars(Var1), ncol = 2L) +
-  geom_hline(yintercept = threshold.limit, color = "red", linetype = "solid")
-
-dev.copy(pdf, paste0(output.dir, "CD45Pos_freq_of_cluster_by_azimuth_anno.pdf"))
-dev.off()
-
-# many clusters are quite exclusively annotated as a single cell subtype
-# these can be defined and annotated as such for eaiser downstream interpretation 
-# other clusters will be annotated biologically later
-
-threshold.y <- y >= threshold.limit
-
-colSums(threshold.y)
-
-
-# use fine grain azimuth anno to try see if can define these populations more specifically 
-
-
-# lower threshold for fine grain annotation  
-threshold.limit <- 80
-
-####################################
-# inspect monocyte clusters 
-####################################
-
-temp.df <- CD45pos.seurat@meta.data %>%
-  filter(seurat_clusters %in% mono.clusters)
-
-temp.df$seurat_clusters <- droplevels(temp.df$seurat_clusters)
-
-# calculate the frequency of each cluster using fine grain azimuth
-x <- table(temp.df$predicted.celltype.l3, temp.df$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-y_filtered <- y %>%
-  filter(grepl("Mono", Var1))
-
-ggplot(y_filtered) +
-  aes(x = Var2, y = Freq, fill = Var1) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_hue(direction = 1) +
-  theme_minimal() +
-  facet_wrap(vars(Var1), ncol = 2L) +
-  geom_hline(yintercept = threshold.limit, color = "red", linetype = "solid")
-
-dev.copy(pdf, paste0(output.dir, "CD45Pos_monocyte_clusters.pdf"))
-dev.off()
-
-
-
-####################################
-# inspect DC clusters 
-####################################
-
-temp.df <- CD45pos.seurat@meta.data %>%
-  filter(seurat_clusters %in% dc.clusters)
-
-temp.df$seurat_clusters <- droplevels(temp.df$seurat_clusters)
-
-# calculate the frequency of each cluster using fine grain azimuth
-x <- table(temp.df$predicted.celltype.l3, temp.df$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-y_filtered <- y %>%
-  filter(grepl("DC", Var1))
-
-ggplot(y_filtered) +
-  aes(x = Var2, y = Freq, fill = Var1) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_hue(direction = 1) +
-  theme_minimal() +
-  facet_wrap(vars(Var1), ncol = 2L) +
-  geom_hline(yintercept = threshold.limit, color = "red", linetype = "solid")
-
-dev.copy(pdf, paste0(output.dir, "CD45Pos_DC_clusters.pdf"))
-dev.off()
-
-
-# 26 is clearly a pDC looking cluster 
-# but cluster 18 is unclear if cDC1 or cDC2, will need to inspect gene expression profile 
-
-
-
-
-####################################
-# inspect NK clusters 
-####################################
-
-
-temp.df <- CD45pos.seurat@meta.data %>%
-  filter(seurat_clusters %in% nk.clusters)
-
-temp.df$seurat_clusters <- droplevels(temp.df$seurat_clusters)
-
-# calculate the frequency of each cluster using fine grain azimuth
-x <- table(temp.df$predicted.celltype.l2, temp.df$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-y_filtered <- y %>%
-  filter(grepl("NK", Var1))
-
-ggplot(y_filtered) +
-  aes(x = Var2, y = Freq, fill = Var1) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_hue(direction = 1) +
-  theme_minimal() +
-  facet_wrap(vars(Var1), ncol = 2L) +
-  geom_hline(yintercept = threshold.limit, color = "red", linetype = "solid")
-
-dev.copy(pdf, paste0(output.dir, "CD45Pos_NK_clusters.pdf"))
-dev.off()
-
-# cluster 8 seems to mostly be of NK_4 type annotation at level 3 and just NK at level 2
-
-
-####################################
-# inspect B cell clusters
-####################################
-
-
-temp.df <- CD45pos.seurat@meta.data %>%
-  filter(seurat_clusters %in% bcell.clusters)
-
-temp.df$seurat_clusters <- droplevels(temp.df$seurat_clusters)
-
-# calculate the frequency of each cluster using fine grain azimuth
-x <- table(temp.df$predicted.celltype.l2, temp.df$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-y_filtered <- y %>%
-  filter(grepl("B", Var1))
-
-ggplot(y_filtered) +
-  aes(x = Var2, y = Freq, fill = Var1) +
-  geom_col(show.legend = FALSE) +
-  scale_fill_hue(direction = 1) +
-  theme_minimal() +
-  facet_wrap(vars(Var1), ncol = 2L) +
-  geom_hline(yintercept = threshold.limit, color = "red", linetype = "solid")
-
-dev.copy(pdf, paste0(output.dir, "CD45Pos_B_clusters.pdf"))
-dev.off()
-
-# cluster 5 looks to be more like a B-naive cluster but 30% is representated as B-intermediate. 
-
-# fine grain resolution of this will require gene expression data 
-
-
-#
-# different way to visualise data
-
-#############################
-# cluster by annotation 
-#############################
-
-# large grain annotation
-
-# broad annotation 
-## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# as opposed to clusters 50/50 split between annotations 
-
-
-# calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-x <- table(CD45pos.seurat@meta.data$predicted.celltype.l1, CD45pos.seurat@meta.data$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-
-cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-
-for(i in seq_along(cluster.id)){
-  
-  y.filt <- y %>%
-    filter(Var2 == cluster.id[i])
+if(long.compute){
   
   
-  library(ggplot2)
+  CD45pos.seurat <- PrepSCTFindMarkers(CD45pos.seurat)
   
-  p1 <- ggplot(y.filt) +
-    aes(x = Var1, y = Freq, fill = Var1) +
-    geom_col() +
-    scale_fill_hue(direction = 1) +
-    labs(title = paste0("Cluster ", cluster.id[i])) +
-           coord_flip() +
-           theme_minimal() +
-           theme(legend.position = "none") +
-           ylim(0, 100)
-         
-         print(p1)
-         
-         dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_broad_azimuth_annotation_freq.pdf"))
-         dev.off()
-         
+  # set assay
+  DefaultAssay(CD45pos.seurat) <- "SCT"
+  
+  
+  
+  # add annotation for treatment 
+  CD45pos.seurat@meta.data$Treatment_cluster <- paste0(CD45pos.seurat@meta.data$Treatment, "_", CD45pos.seurat@meta.data$seurat_clusters)
+  
+  # set Idents
+  Idents(CD45pos.seurat) <- "Treatment_cluster"
+  
+  
+  cluster.ids <- unique(CD45pos.seurat@meta.data$seurat_clusters)
+  
+  # create list to store output
+  DEG.list <- list()
+  
+  # run through DEG specifically between vehicle and treatment for each cluster 
+  
+  for(i in seq_along(cluster.ids)){
+    temp.de <- FindMarkers(CD45pos.seurat,
+                           assay = "SCT",
+                           ident.1 = paste0("PDS_", cluster.ids[i]),
+                           ident.2 = paste0("Vehicle_", cluster.ids[i]),
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    DEG.list[[i]] <- temp.de
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_PDS_", cluster.ids[i], "_vs_Vehicle_", cluster.ids[i], ".csv"))
+    
+    
+  }
+  # add names to DEG.list
+  names(DEG.list) <- cluster.ids
+  
+  # save DEG list to file 
+  saveRDS(DEG.list, paste0(output.dir, "DEG_list_object.rds"))
+  
+  
+}else{
+  
+  DEG.list <- readRDS(paste0(output.dir, "DEG_list_object.rds"))
+  
 }
-
-
-#############################
-# medium grain annotation 
-#############################
-
-## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# as opposed to clusters 50/50 split between annotations 
-
-
-# calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-x <- table(CD45pos.seurat@meta.data$predicted.celltype.l2, CD45pos.seurat@meta.data$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-
-cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-
-for(i in seq_along(cluster.id)){
-  
-  y.filt <- y %>%
-    filter(Var2 == cluster.id[i])
-  
-  
-  library(ggplot2)
-  
-  p1 <- ggplot(y.filt) +
-    aes(x = Var1, y = Freq, fill = Var1) +
-    geom_col() +
-    scale_fill_hue(direction = 1) +
-    labs(title = paste0("Cluster ", cluster.id[i])) +
-           coord_flip() +
-           theme_minimal() +
-           theme(legend.position = "none") +
-           ylim(0, 100)
-         
-         print(p1)
-         
-         dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_medium_grain_azimuth_annotation_freq.pdf"))
-         dev.off()
-         
-}
-
-#############################
-# fine grain annotation 
-#############################
-
-## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# as opposed to clusters 50/50 split between annotations 
-
-
-# calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-x <- table(CD45pos.seurat@meta.data$predicted.celltype.l3, CD45pos.seurat@meta.data$seurat_clusters)
-cluster.totals <- colSums(x)
-y <- sweep(x, 2, cluster.totals, FUN = "/")
-y <- y*100
-y <- as.data.frame(y)
-
-
-cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-
-for(i in seq_along(cluster.id)){
-  
-  y.filt <- y %>%
-    filter(Var2 == cluster.id[i])
-  
-  
-  library(ggplot2)
-  
-  p1 <- ggplot(y.filt) +
-    aes(x = Var1, y = Freq, fill = Var1) +
-    geom_col() +
-    scale_fill_hue(direction = 1) +
-    labs(title = paste0("Cluster ", cluster.id[i])) +
-           coord_flip() +
-           theme_minimal() +
-           theme(legend.position = "none") +
-           ylim(0, 100)
-         
-         print(p1)
-         
-         dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_fine_grain_azimuth_annotation_freq.pdf"))
-         dev.off()
-         
-}
-
-
-######################################################
-# using all above plots annotation definitions are 
-######################################################
-
-# broad annotations
-# cluster annotations 
-mono.clusters <- c(2, 4, 6, 7, 9, 12, 13, 14, 17, 19, 20, 21, 22)
-nk.clusters <- c(8, 16)
-bcell.clusters <- c(5)
-dc.clusters <- c(11, 18, 26)
-cd4.clusters <- c(23)
-cd8.clusters <- c(3)
-erythrocyte.clusters <- c(27)
-
-
-# fine grain annotations
-pDC.clusters <- c(26)
-cd14.mono.clusters <- c(2, 4, 6, 9, 14, 20, 22)
-cd16.mono.clusters <- c(13, 17)
-cDC1.clusters <- c(18)
-cDC2.clusters <- c(11)
-cd8.EM <- c(3)
-cd4.cm <- c(23)
-
-
-
-# ambig clusters 
-# cluster 25 = nk/cd8
-# cluster 1 cd4/cd8
-# cluster 10 nk/cd8
-# cluster 0 mono/dc
-# cluster 24 and 15 = mono/other
-# cluster 27 = other maybe erythrocytes
-
-
-# for defined clusters confirm identity with connonical markers
-
-
-CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
-  dplyr::mutate(Anno_l1 = case_when(seurat_clusters %in% mono.clusters ~ paste0("Mono_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% nk.clusters ~ paste0("NK_cluster_", seurat_clusters),
-                                    seurat_clusters %in% bcell.clusters ~ paste0("Bcell_cluster_", seurat_clusters),
-                                    seurat_clusters %in% dc.clusters ~ paste0("DC_cluster_", seurat_clusters),
-                                    seurat_clusters %in% cd4.clusters ~ paste0("CD4_cluster_", seurat_clusters),
-                                    seurat_clusters %in% cd8.clusters ~ paste0("CD8_cluster_", seurat_clusters),
-                                    seurat_clusters %in% erythrocyte.clusters ~ paste0("Erythrocyte_cluster_", seurat_clusters),
-                                    TRUE ~ seurat_clusters), 
-                Anno_l2 = case_when(seurat_clusters %in% pDC.clusters ~ paste0("pDC_cluster_", seurat_clusters),
-                                    seurat_clusters %in% cd14.mono.clusters ~ paste0("CD14_Mono_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% cd16.mono.clusters ~ paste0("CD16_Mono_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% cDC1.clusters ~ paste0("cDC1_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% cDC2.clusters ~ paste0("cDC2_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% cd8.EM ~ paste0("CD8_EM_cluster_", seurat_clusters), 
-                                    seurat_clusters %in% cd4.cm ~ paste0("CD4_CM_cluster_", seurat_clusters), 
-                                    TRUE ~ Anno_l1))
-
-
-
-
-
-
-
-
-DimPlot_scCustom(CD45pos.seurat, 
-                 label = T,
-                 group.by = "Anno_l1") + NoLegend()
-
-DimPlot_scCustom(CD45pos.seurat, 
-                 label = T,
-                 group.by = "Anno_l2") + NoLegend()
-
-
-
-
-
-
-
-
-# cluster 5 looks to be clearly B cell cluster 
-
-
-# how big are clusters
-x <- table(CD45pos.seurat@meta.data$seurat_clusters)
-barplot(x, las = 2)
-#write.csv(x, paste0())
 
 
 ```
@@ -675,6 +611,742 @@ barplot(x, las = 2)
 
 
 
+### Treatment-wise DEGs - Volcano
+```{r treatmentwise_DEGs_volcano}
+
+# visualise treatment-wise DEGs as volcano plots
+
+
+if(do.plot){
+  
+  for(i in 1:length(DEG.list)){
+    
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- DEG.list[[i]] %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0(names(DEG.list)[i], " PDS vs Vehicle"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_PDS_vs_Vehicle_cluster_", names(DEG.list)[i], ".pdf"))
+    dev.off()
+    
+    
+  }
+  
+}
+
+```
+
+
+## Cluster annotation {.tabset}
+
+### SingleR cluster annotation
+```{r SingleR_cluster_annotation}
+
+# Notes:
+# there is an error with collect() when trying to load celldex datasets
+# i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
+# but im running r 4.2.3 and this would require 4.3
+# not keen to upgrade right now 
+# so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
+# need to downgrade to this version 
+#devtools::install_version("dbplyr", version = "2.3.4")
+#devtools::install_version("dbplyr", version = "2.4")
+# in theory if biocmanager is up to date, could just run below and should fix the problem
+#library(BiocManager) # 3.16
+#install("BiocFileCache")
+# also:
+# need to ensure matrixStats is at version 1.1.0 
+#remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
+#BiocManager::install(version = "3.18")
+
+
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Pos_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  # load required packages
+  library("SingleR")
+  library("celldex")
+  
+  
+  ##################################
+  # Using MouseRNAseqData
+  ##################################
+  
+  ref.mouse <-  celldex::MouseRNAseqData()
+  
+  
+  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
+  
+  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
+  # further split into 28 subtypes under label.fine 
+  
+  
+  ######################
+  # Fine labels 
+  ######################
+  SingleR.pred <- SingleR(test = CD45pos.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45pos.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.fine)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+  #SingleR::plotDeltaDistribution(SingleR.pred)
+  #SingleR::plotScoreDistribution(SingleR.pred)
+  
+  ######################
+  # Main labels 
+  ######################
+  
+  SingleR.pred <- SingleR(test = CD45pos.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45pos.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.main)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+  
+  #####################
+  # Use ImmGenData
+  #####################
+  # Info: Mouse, Microarray, 830 samples, 20 main labels, 253 fine lables, Hematopoietic & Immune focus
+  
+  ImmGen.data <- celldex::ImmGenData()
+  
+  
+  # Fine labels
+  SingleR.pred.fine <- SingleR(test = CD45pos.seurat@assays$SCT$data, 
+                               ref = ImmGen.data, 
+                               method = "cluster",
+                               clusters = CD45pos.seurat@meta.data$seurat_clusters,
+                               labels = ImmGen.data$label.fine)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred.fine, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_ImmGen_db.pdf"), plot = p1)
+  
+  
+  # Main labels
+  SingleR.pred.main <- SingleR(test = CD45pos.seurat@assays$SCT$data, 
+                               ref = ImmGen.data, 
+                               method = "cluster",
+                               clusters = CD45pos.seurat@meta.data$seurat_clusters,
+                               labels = ImmGen.data$label.main)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred.main, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_ImmGen_db.pdf"), plot = p1)
+  
+  
+}
+
+
+```
+ 
+### Transfer SingleR annotations to seurat object 
+```{r transfer_singleR_annotations}
+
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Pos_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+
+########################################
+# transfer labels to seurat object 
+########################################
+
+table(predicted=SingleR.pred.main$labels, cluster=rownames(SingleR.pred.main))
+table(predicted=SingleR.pred.fine$labels, cluster=rownames(SingleR.pred.fine))
+
+# Main labels
+main.labels <- SingleR.pred.main$labels
+names(main.labels) <- rownames(SingleR.pred.main)
+
+# Fine labels
+fine.labels <- SingleR.pred.fine$labels
+names(fine.labels) <- rownames(SingleR.pred.fine)
+
+####################
+# rename clusters 
+####################
+
+# Main labels
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$seurat_clusters
+CD45pos.seurat <- Rename_Clusters(CD45pos.seurat, new_idents = main.labels)
+CD45pos.seurat@meta.data$SingleR_main <- Idents(CD45pos.seurat)
+
+# Fine labels
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$seurat_clusters
+CD45pos.seurat <- Rename_Clusters(CD45pos.seurat, new_idents = fine.labels)
+CD45pos.seurat@meta.data$SingleR_fine <- Idents(CD45pos.seurat)
+
+
+############
+# Visualise
+############
+
+# Main label
+p.main <- scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+                                        group.by = "SingleR_main", 
+                                        label = TRUE,
+                                        reduction = "umap")
+
+print(p.main)
+
+dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_main.pdf"))
+dev.off()
+
+
+# Fine label
+p.fine <- scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+                                        group.by = "SingleR_fine", 
+                                        label = TRUE,
+                                        reduction = "umap")
+
+print(p.fine)
+
+dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_fine.pdf"))
+dev.off()
+
+
+# side-by-side with cluster numbers
+p.clusters <- scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+                                            group.by = "seurat_clusters", 
+                                            label = TRUE,
+                                            reduction = "umap")
+
+# clusters plus main
+print(p.clusters | p.main)
+
+dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_main_plus_clusters.pdf"))
+dev.off()
+
+# clusters plus fine
+print(p.clusters | p.fine)
+
+dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_fine_plus_clusters.pdf"))
+dev.off()
+  
+}
+
+```
+
+
+# Neutrophil gene  heatmap
+```{r remedy001}
+
+
+
+```
+
+## RQ1: Which CD45Neg clusters express chemokines or cytokines {.tabset}
+
+### Chemokine and Cytokine expression visualisation 
+```{r chemokine_cytokine_expression}
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_chemokine_cytokines/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# aggregate expression for heatmap visualisation
+pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("seurat_clusters"))
+
+
+########################################
+# List gene sets of interest to plot
+########################################
+
+cxc.genes <- grep("^Cxc.*", rownames(pseudo.cd45pos), value = T)
+ccr.genes <- grep("^Ccr.*", rownames(pseudo.cd45pos), value = T)
+il.genes <- grep("^Il.*", rownames(pseudo.cd45pos), value = T)
+gzm.genes <- grep("^Gzm.*", rownames(pseudo.cd45pos), value = T)
+ifn.genes <- grep("^Ifn.*", rownames(pseudo.cd45pos), value = T)
+custom.genes <- c("Il1b", "Il6", "Il12a", "Il12b", "Ifng", "Tnf", "Ccl2", "Ccl3", "Ccl4", "Ccl5", "Cxcl1", "Cxcl9", "Cxcl10") # Cxcl13 not present in CD45Pos dataset
+
+goi <- list(Cxcr_genes = cxc.genes, 
+            Ccr_genes = ccr.genes,
+            Interleukin_genes = il.genes,
+            Gzm_genes = gzm.genes,
+            Ifn_genes = ifn.genes,
+            Custom_genes = custom.genes)
+
+
+###################
+# Plot heatmaps
+###################
+
+for(i in seq_along(names(goi))){
+  
+  print(
+    DoHeatmap(pseudo.cd45pos, 
+              features = goi[[i]], 
+              draw.lines = FALSE, 
+              angle = 90,
+              raster = FALSE) + 
+      scico::scale_fill_scico(palette = "batlow", 
+                              direction = 1, 
+                              na.value = "white")
+  )
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_", names(goi)[i], ".pdf"))
+  dev.off()
+  
+}
+
+
+##############################
+# Stacked vln plot
+##############################
+
+for(i in seq_along(names(goi))){
+  
+  if(length(goi[[i]]) <= 15){
+    
+    
+    print(
+      scCustomize::Stacked_VlnPlot(CD45pos.seurat, 
+                                   features = goi[[i]],
+                                   group.by = "seurat_clusters",
+                                   pt.size = 0)
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Pos_", names(goi)[i], ".pdf"))
+    dev.off()
+    
+  }else{
+    
+    temp.goi <- goi[[i]]
+    
+    # Split the vector into multiple vectors
+    split_indices <- seq(1, length(temp.goi), by = 15)
+    split_list <- lapply(split_indices, function(i) temp.goi[i:min(i + 14, length(temp.goi))])
+    
+    
+    for(j in seq_along(length(split_list))){
+      
+      print(
+        scCustomize::Stacked_VlnPlot(CD45pos.seurat, 
+                                     features = split_list[[j]],
+                                     group.by = "seurat_clusters",
+                                     pt.size = 0)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Pos_", names(goi)[i], "_", j, ".pdf"))
+      dev.off()
+      
+    }
+    
+  }
+  
+}
+
+
+```
+
+
+
+
+
+
+
+# re-write below based on analysis layout in cd45neg dataset 
+
+
+
+
+## Cluster annotation CD45Pos dataset
+```{r CD45Pos_data_cluster_annotation}
+
+if(long.compute){
+  output.dir <- "results/CD45Pos_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  # load required packages
+  library("SingleR")
+  library("celldex")
+  
+  ################################################################
+  # Use a couple databased to get broad overview of clusters 
+  ################################################################
+  
+  # error with collect() when trying to load celldex datasets
+  
+  # i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
+  # but im running r 4.2.3 and this would require 4.3
+  # not keen to upgrade right now 
+  # so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
+  
+  # need to downgrade to this version 
+  #devtools::install_version("dbplyr", version = "2.3.4")
+  #devtools::install_version("dbplyr", version = "2.4")
+  
+  # in theory if biocmanager is up to date, could just run below and should fix the problem
+  
+  #library(BiocManager) # 3.16
+  #install("BiocFileCache")
+  
+  
+  # need to ensure matrixStats is at version 1.1.0 
+  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
+  #BiocManager::install(version = "3.18")
+  
+  #####################
+  # Use ImmGenData
+  #####################
+  # Info: Mouse, Microarray, 830 samples, 20 main labels, 253 fine lables, Hematopoietic & Immune focus
+  
+  ImmGen.data <- celldex::ImmGenData()
+  
+  SingleR.pred <- SingleR(test = Nils.seurat$CD45Pos@assays$SCT$data, 
+                          ref = ImmGen.data, 
+                          method = "cluster",
+                          clusters = Nils.seurat$CD45Pos@meta.data$seurat_clusters,
+                          labels = ImmGen.data$label.fine)
+  
+  
+  # Plot 
+  plotScoreHeatmap(SingleR.pred, 
+                   show_colnames = TRUE)
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"))
+  dev.off()
+  
+  
+  
+  
+  SingleR.pred <- SingleR(test = Nils.seurat$CD45Pos@assays$SCT$data, 
+                          ref = ImmGen.data, 
+                          method = "cluster",
+                          clusters = Nils.seurat$CD45Pos@meta.data$seurat_clusters,
+                          labels = ImmGen.data$label.main)
+  
+  
+  # Plot 
+  plotScoreHeatmap(SingleR.pred, 
+                   show_colnames = TRUE)
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"))
+  dev.off()
+  
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## RQ1: Which cell subsets are producing the chemokines {.tabset}
+
+### Vis chemokine/cytokine expression
+```{r chemokine_cytokine_expression}
+
+# create output dir
+output.dir <- paste0("results/RQ1_which_celltypes_express_chemokines/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# aggregate expression for heatmap visualisation
+pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("seurat_clusters"))
+
+
+
+
+
+# CXCR chemokines
+goi <- grep("^Cxc.*", rownames(pseudo.cd45pos), value = T)
+goi
+
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_Cxc_chemokines.pdf"))
+dev.off()
+
+
+# CCR genes
+goi <- grep("^Ccr.*", rownames(pseudo.cd45pos), value = T)
+goi
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_Ccrs.pdf"))
+dev.off()
+
+
+# Interleukins
+goi <- grep("^Il.*", rownames(pseudo.cd45pos), value = T)
+goi
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_interleukins.pdf"))
+dev.off()
+
+
+
+# Granzymes
+goi <- grep("^Gzm.*", rownames(pseudo.cd45pos), value = T)
+goi
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_granzymes.pdf"))
+dev.off()
+
+
+
+# Interferons
+goi <- grep("^Ifn.*", rownames(pseudo.cd45pos), value = T)
+goi
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_interferons.pdf"))
+dev.off()
+
+
+#######################
+# custom set of genes
+#######################
+# Nils provided this set of genes he is particularly interested in 
+
+# key genes
+# IL1b, IL6, IL12, IFNG, TNFA, 
+# CCL2,3,4,5 
+# CXCL1, CXCL9,10,13 
+
+goi <- c("Il1b", "Il6", "Il12a", "Il12b", "Ifng", "Tnf", "Ccl2", "Ccl3", "Ccl4", "Ccl5", "Cxcl1", "Cxcl9", "Cxcl10", "Cxcl13")
+
+
+DoHeatmap(pseudo.cd45pos, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_custom_genes.pdf"))
+dev.off()
+
+
+```
+
+
+
+
+## RQ2: Are there differences between macrophages and DCs between PDS and Vehicle (because there are DAMPs that should activate them) {.tabset}
+
+
+```{r treatment_differences_in_DCs_Macrophages}
+
+
+# create output dir
+output.dir <- paste0("results/RQ2_Macrophage_DC_treatment_differences/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# Firstly are there abundance differences or polarisations torwards particular subsets of marophages or DCs between untreated and treated 
+
+dist.table <- table(CD45pos.seurat@meta.data$seurat_clusters, CD45pos.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+library(ggplot2)
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  theme_minimal() +
+  facet_wrap(vars(Var1))
+
+dev.copy(pdf, paste0(output.dir, "Barplot_freq_of_clusters_as_percentage_of_treatment.pdf"))
+dev.off()      
+
+
+# no replicates in dataset so cant perform any statistical analysis on this type of oberservation. 
+# but some clusters do seem to be largely polarised/captured more in treatment or ctrl in comparison to the other. 
+# notably, CD14_Mono_14, CD14_Mono_22, CD14_Mono_4 are enriched in Treatment dataset 
+
+# where as cDC1_18, cDC2_11, Monocyte_7, and pDC_26 are slightly enriched in vehicle dataset
+
+# largest polarisations seem to be Bcell_5 and Tcell_1 enrichment in vehicle dataset
+
+
+# lets dig into the monocyte and DC populations, are there any genes different between vehicle and treatment 
+# not sure this will be useful, expect not much differences. really should be comparing CD14_Mono_14 to other mono populations, as these are the enriched in treatment ones. 
+# but will perform the analysis regardless to see what occurs 
+
+
+# plot umaps split by treatment 
+scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+                              group.by = "seurat_clusters", 
+                              split.by = "Treatment", 
+                              label = TRUE,
+                              reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_split_by_treatment.pdf"))
+dev.off()
+
+
+```
+
+
+
+
+
+
+## cluster highlight plots
+```{r remedy001}
+
+scCustomize::Cluster_Highlight_Plot(CD45pos.seurat, cluster_name = 25, reduction = "umap")
+
+
+```
 
 
 
@@ -682,862 +1354,341 @@ barplot(x, las = 2)
 # also not written again for this dataset specific analysis - check all code 
 
 
-## Which cell subsets are producing the chemokines {.tabset}
 
-## WORK IN PROGRESS
-### Vis chemokine/cytokine expression
-```{r chemokine_cytokine_expression}
-
-# create output dir
-output.dir <- paste0("results/chemo_cyto_expression/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-
-# aggregate expression for heatmap visualisation
-pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-
-pseudo.cd45neg <- AggregateExpression(Nils.seurat$CD45Neg,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-
-
-# identify chemokines/cytokines of interest
-goi <- grep("^IL.*", rownames(pseudo.cd45pos), value = T)
-goi
-
-
-goi <- grep("^IF.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^CX.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^GZ.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi
-
-
-
-goi <- c("IL1B", "IL6", "IFNG", "TNF", "CCL2", "CCL3", "CCL4", "CCL5", "CXCL1", "CXCL9", "CXCL10", "CXCL13")
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-
-head(Nils.seurat$CD45Pos@meta.data)
-scCustomize::DimPlot_scCustom(Nils.seurat$CD45Pos,
-                              group.by = "predicted.celltype.l2", 
-                              reduction = "umap",
-                              label = T)
-
-scCustomize::FeaturePlot_scCustom(Nils.seurat$CD45Pos,
-                                  feature = "IL7R", 
-                                  reduction = "umap")
-
-
-
-
-
-
-
-
-
-goi <- grep("^Il1b.*", rownames(pseudo.cd45neg), value = T)
-goi
-
-
-goi <- c("Il1b", "Il6", "Ifng", "Tnf")
-goi <- c("Ccl2", "Ccl3", "Ccl4", "Ccl5")
-goi <- c("Cxcl1", "Cxcl9", "Cxcl10", "Cxcl13")
-DoHeatmap(pseudo.cd45neg, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-#dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
-#dev.off()
-
-
-# key genes
-# IL1b, IL6, IL12, IFNG, TNFA, 
-
-# CCL2,3,4,5 
-# CXCL1, CXCL9,10,13 
-
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-# NOT WORKING - check all code 
-## Difference between treatment and vehicle {.tabset}
-# Cant really do DA without replicate samples 
-
-### Differential Abundance testing
-```{r Differential_Abundance_testing}
-
-#BiocManager::install("miloR")
-
-library("miloR")
-library("SingleCellExperiment")
-library("scater")
-library("scran")
-
-
-#############################################
-# Perform analysis for CD45Pos dataset
-#############################################
-
-
-# set assay
-DefaultAssay(Nils.seurat$CD45Pos) <- "SCT"
-
-
-
-# create output dir
-output.dir <- paste0("results/DA_analysis_CD45Pos/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-
-
-# Note: 
-# milo object capatilises lots of variables, ie umap = UMAP
-# below is method was used before i realised this, keeping for reference 
-# some error in buildGraph() call prevents specifiying to use integrated.cca as reduced.dim, so it recalculates PCA, therefore rewrite PCA to be integrated.cca
-#HL.seurat[["pca"]] <- CreateDimReducObject(embeddings = HL.seurat[["integrated.cca"]]@cell.embeddings, key = "PC_ ", assay = DefaultAssay(HL.seurat))
-#names of dim reductions get capatilized for some reason, therefore reduced.dim = "INTEGRATED.CCA"
-
-
-#######################
-# Create milo object
-#######################
-
-# create single cell experiment object
-CD45Pos.sce <- Seurat::as.SingleCellExperiment(Nils.seurat[["CD45Pos"]],
-                                               assay = "SCT")
-
-# convert object into a milo object
-CD45Pos.sce <- Milo(CD45Pos.sce)
-CD45Pos.sce
-
-
-
-#######################
-# Create KNN graph
-#######################
-
-# use nn graph generated as part of seurat pipeline
-Graphs(CD45Pos.sce, slot = NULL)
-Neighbors(CD45Pos.sce, slot = NULL)
-Reductions(CD45Pos.sce, slot = NULL)
-
-
-CD45Pos.sce@graph$SCT_nn <- Nils.seurat[["CD45Pos"]]@graphs$SCT_nn
-
-
-# build from the adjacency matrix
-milo.graph <- miloR::buildFromAdjacency(CD45Pos.sce@graph$SCT_nn)
-
-# append graph to milo object
-CD45Pos.sce@graph <- milo.graph@graph
-
-
-# set some global-ish variables 
-k.parm.use <- 20
-d.use <- 50
-
-
-# conversly, recaculate knn graph 
-#HL.sce <- buildGraph(HL.sce,
-#                 k = k.parm.use,
-#                  d = 30, 
-#            reduced.dim = "INTEGRATED.CCA")
-
-
-########################
-# make Neighbourhoods
-########################
-
-CD45Pos.sce <- makeNhoods(CD45Pos.sce,
-                          prop = 0.1,
-                          k = k.parm.use, # default for seurat findneighbours is k.parm = 20
-                          d = d.use, # dim reduction integrated.cca is 50 dims
-                          reduced_dims = "INTEGRATED.CCA.SCT",
-                          refined = TRUE, 
-                          refinement_scheme = "graph") # make nhoods using graph-only as this is faster
-
-# Rule of thumb, aim for average neighbourhood size over 5*n_samples 
-# therefore 5*10 = 50
-#Empirically, we found it’s best to have a distribution peaking between 50 and 100
-
-
-plotNhoodSizeHist(CD45Pos.sce, bins = 100)
-
-dev.copy(pdf, paste0(output.dir, "Neighbourhood_size_histogram.pdf"))
-dev.off()
-
-
-########################
-# count cells 
-########################
-
-CD45Pos.sce <- countCells(CD45Pos.sce, 
-                          meta.data = data.frame(colData(CD45Pos.sce)),
-                          samples = "Treatment") # make the nhood X sample counts matrix
-
-head(nhoodCounts(CD45Pos.sce))
-
-##############################
-# calculate nhood distance
-##############################
-
-# longest compute time of this entire pipeline 
-CD45Pos.sce <- calcNhoodDistance(CD45Pos.sce, 
-                                 d = d.use, 
-                                 reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-####################################
-# Differential Abundance testing
-####################################
-
-# design model matrix for DA testing
-
-DA.design <- data.frame(colData(CD45Pos.sce))[,c("SampleID", "Treatment")]
-DA.design <- distinct(DA.design)
-rownames(DA.design) <- DA.design$SampleID
-
-## Reorder rownames to match columns of nhoodCounts(milo)
-DA.design <- DA.design[colnames(nhoodCounts(CD45Pos.sce)), , drop=FALSE]
-table(DA.design$SampleID)
-
-table(DA.design$Treatment)
-
-# create contrasts
-#contrast.1 <- c("Age1wk - Age4wk") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-contrast.status <- c("SampleIDPDS_CD45Pos - SampleIDVehicle_CD45Pos")
-
-
-# this is the edgeR code called by `testNhoods`
-# check it looks correct
-model <- model.matrix(~ 0 + SampleID, data=DA.design)
-mod.constrast <- makeContrasts(contrasts=contrast.status, levels=model)
-
-mod.constrast
-
-
-# perform DA test
-da_results_status <- testNhoods(CD45Pos.sce, 
-                                design = ~ SampleID,
-                                design.df = DA.design, 
-                                model.contrasts = contrast.status,
-                                fdr.weighting= "graph-overlap", 
-                                reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-
-
-
-
-# old single contrast code 
-
+## NO LONGER USED
+## annotate clusters {.tabset}
+```{r annotate_clusters}
 # 
-matrix_design <- data.frame(colData(CD45Pos.sce))[,c("Treatment", "SampleID")]
-matrix_design
-# 
-# ## factorise Treatment
-matrix_design$Treatment <- as.factor(matrix_design$Treatment) 
-matrix_design <- distinct(matrix_design)
-rownames(matrix_design) <- matrix_design$Treatment
-
-matrix_design
+# if(long.compute){
+#   
+# ########################################################
+# # provide annotation for clusters where possible 
+# ########################################################
 # 
 # 
-# # test nhoods for DA
-da_results <- testNhoods(CD45Pos.sce,
-                         design = ~ Treatment,
-                         design.df = matrix_design, 
-                         reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-
-#######################
-# overview of results 
-#######################
-
-
-# how many nhoods are DA
-da_results_status %>%
-  filter(SpatialFDR < 0.05) %>%
-  arrange(SpatialFDR) %>%
-  head()
-
-table(da_results_status$SpatialFDR < 0.05) # 513 DA nhoods
-table(da_results_outcome$SpatialFDR < 0.05) # 3 DA nhoods
-
-length(da_results_status$Nhood) # 2,833 nhoods
-length(da_results_outcome$Nhood) # 2,833 nhoods
-
-# distribution of pvalue
-
-ggplot(da_results_status, aes(PValue)) + geom_histogram(bins=50)
-
-dev.copy(pdf, paste0(output.dir, "DA_result_pvalue_histogram_status.pdf"))
-dev.off()
-
-
-ggplot(da_results_outcome, aes(PValue)) + geom_histogram(bins=50)
-
-dev.copy(pdf, paste0(output.dir, "DA_result_pvalue_histogram_outcome.pdf"))
-dev.off()
-
-
-# volcano plots 
-
-
-ggplot(da_results_status, aes(logFC, -log10(SpatialFDR))) + 
-  geom_point() +
-  geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR
-
-dev.copy(pdf, paste0(output.dir, "DA_result_volcano_status.pdf"))
-dev.off()
-
-
-ggplot(da_results_outcome, aes(logFC, -log10(SpatialFDR))) + 
-  geom_point() +
-  geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR
-
-dev.copy(pdf, paste0(output.dir, "DA_result_volcano_outcome.pdf"))
-dev.off()
-
-
-
-
-head(da_results)
-
-######################################################
-# visualise nhoods on umap projection
-######################################################
-
-# Build nhood graph
-HL.sce <- buildNhoodGraph(HL.sce)
-
-
-
-# Plot single-cell UMAP
-umap_pl <- plotReducedDim(HL.sce, 
-                          dimred = "UMAP",
-                          colour_by="predicted.celltype.l1",
-                          text_by = "predicted.celltype.l1", 
-                          text_size = 3, 
-                          point_size = 0.5) +
-  guides(fill = "none")
-
-## Plot neighbourhood graph
-nh_graph_status <- plotNhoodGraphDA(HL.sce,
-                                    da_results_status, 
-                                    layout="UMAP",
-                                    alpha=0.1) 
-
-
-nh_graph_outcome <- plotNhoodGraphDA(HL.sce,
-                                     da_results_outcome, 
-                                     layout="UMAP",
-                                     alpha=0.1) 
-
-# print plots
-umap_pl + nh_graph_status + 
-  patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_Nhood_DA_graph_status.pdf"))
-dev.off()
-
-umap_pl + nh_graph_outcome + 
-  patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_Nhood_DA_graph_outcome.pdf"))
-dev.off()
-
-
-
-# for context show umap with disease status highlighted
-plotReducedDim(HL.sce, 
-               dimred = "UMAP",
-               colour_by="DiseaseStatus",
-               text_by = "DiseaseStatus", 
-               text_size = 3, 
-               point_size = 0.5) +
-  guides(fill = "none")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_DiseaseStatus.pdf"))
-dev.off()
-
-
-plotReducedDim(HL.sce, 
-               dimred = "UMAP",
-               colour_by="DiseaseOutcome",
-               text_by = "DiseaseOutcome", 
-               text_size = 3, 
-               point_size = 0.5) +
-  guides(fill = "none")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_DiseaseOutcome.pdf"))
-dev.off()
-
-
-
-
-# proceed with analysis for DiseaseStatus only, currently dataset seems insufficient for calling DiseaseOutcome 
-
-
-table(HL.seurat@meta.data$predicted.celltype.l3)
-
-#############################
-# annotate neighbourhoods 
-#############################
-
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status, coldata_col = "predicted.celltype.l1")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "predicted.celltype.l2")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "predicted.celltype.l3")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "seurat_clusters")
-
-head(da_results_status_anno)
-
-
-# Neighbourhoods tend to be homogeneous, we can define a threshold for celltype_fraction to exclude neighbourhoods that are a mix of cell types.
-
-# visualise at each level of annotation 
-anno.var <- c("predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3", "seurat_clusters")
-
-
-for(i in seq_along(anno.var)){
-  
-  plot.var <- paste0(anno.var[i], "_fraction")
-  name.var <- gsub("\\.", "_", anno.var[i])
-  print(ggplot(da_results_status_anno, aes(!!sym(plot.var))) + geom_histogram(bins=100))
-  
-  dev.copy(pdf, paste0(output.dir, "DA_results_DiseaseOutcome_histogram_nhood_", name.var, "fraction.pdf"))
-  dev.off()
-}
-
-
-
-# use above histograms to define thresholds for annotating nhoods as mixed at each resolution of annotation 
-
-threshold <- 0.9
-
-
-da_results_status_anno$celltype.l1 <- ifelse(da_results_status_anno$predicted.celltype.l1_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l1)
-da_results_status_anno$celltype.l2 <- ifelse(da_results_status_anno$predicted.celltype.l2_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l2)
-da_results_status_anno$celltype.l3 <- ifelse(da_results_status_anno$predicted.celltype.l3_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l3)
-da_results_status_anno$seurat_clusters <- ifelse(da_results_status_anno$seurat_clusters_fraction < threshold, "Mixed", da_results_status_anno$seurat_clusters)
-
-
-
-length(da_results_status_anno$Nhood) # 2,833 nhoods
-table(da_results_status_anno$celltype.l1 == "Mixed") # 700 nhoods became mixed
-table(da_results_status_anno$celltype.l2 == "Mixed") # 1335 nhoods became mixed
-table(da_results_status_anno$celltype.l3 == "Mixed") # 1891 nhoods became mixed
-table(da_results_status_anno$seurat_clusters == "Mixed") # 1045 nhoods became mixed
-
-
-
-
-
-
-# visualise at each level of annotation 
-anno.var <- c("predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3", "seurat_clusters")
-
-
-for(i in seq_along(anno.var)){
-  
-  plot.var <- paste0(anno.var[i], "_fraction")
-  name.var <- gsub("\\.", "_", anno.var[i])
-  
-  
-  # Create a ggplot with histogram and line
-  print(
-    ggplot(da_results_status_anno, aes(x = !!sym(plot.var))) +
-      geom_histogram(aes(fill = ifelse(!!sym(plot.var) > threshold, "Above", "Below")), bins = 100, color = "black") +
-      geom_vline(xintercept = threshold, color = "green", linetype = "dashed") +
-      scale_fill_manual(values = c("red", "blue"), name = "Category") +
-      theme_minimal()  # Add additional themes as needed
-  )
-  
-  dev.copy(pdf, paste0(output.dir, "DA_results_DiseaseOutcome_histogram_nhood_", name.var, "fraction_withthreshold.pdf"))
-  dev.off()
-}
-
-
-
-
-# distribution of DA nhoods across annotation 
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l1)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l2)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l3)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$seurat_clusters)
-
-
-
-# Now we can visualize the distribution of DA Fold Changes in different cell types
-
-# iterate over annotation levels 
-
-anno.var <- c("celltype.l1", "celltype.l2", "celltype.l3", "seurat_clusters")
-
-# factorise for plotting
-da_results_status_anno$seurat_clusters <- factor(da_results_status_anno$seurat_clusters, levels = c(levels(HL.seurat$seurat_clusters), "Mixed"))
-
-
-
-for(i in seq_along(anno.var)){
-  
-  name.var <- gsub("\\.", "_", anno.var[i])
-  
-  print(
-    plotDAbeeswarm(da_results_status_anno, 
-                   group.by = anno.var[i])
-  )
-  dev.copy(pdf, paste0(output.dir, "Beeswarm_DA_DiseaseStatus_results_", name.var, ".pdf"))
-  dev.off()
-  
-}
-
-#####################################################################################
-# Group nhoods into larger groups for later deg identification
-#####################################################################################
-
-# once neighbourhoods are identified that are sig between conditions
-# we want to identify markers of these DA neighbourhoods
-
-#The function findNhoodGroupMarkers runs a one-VS-all differential gene expression test to identify marker genes for a group of neighbourhoods of interest. 
-# Before running this function you will need to define your neighbourhood groups depending on your biological question, that need to be stored as a NhoodGroup column in the da_results data.frame.
-
-# In many cases, such as this example, DA neighbourhoods are found in different areas of the KNN graph, and grouping together all significant DA populations might not be ideal, as they might include cells of very different celltypes. 
-# For this kind of scenario, we have implemented a neighbourhood function that uses community detection to partition neighbourhoods into groups on the basis of
-# (1) the number of shared cells between 2 neighbourhoods; (2) the direction of fold-change for DA neighbourhoods; (3) the difference in fold change.
-
-## Run buildNhoodGraph to store nhood adjacency matrix
-HL.sce <- buildNhoodGraph(HL.sce)
-
-# group DA neighbourhoods together using above metrics of shared cells, direction FC and difference FC. 
-
-
-# test different metrics to get nice grouping of nhoods 
-overlap.var <- 5
-max.fc.delta.var <- 10
-
-da_results_status_anno <- groupNhoods(HL.sce,
-                                      da_results_status_anno, 
-                                      da.fdr = 0.05,
-                                      overlap = overlap.var,
-                                      max.lfc.delta = max.fc.delta.var)
-
-
-head(da_results_status_anno) # found 513 DA neighbourhoods at FDR 5%
-length(unique(da_results_status_anno$NhoodGroup)) # number of groups
-
-
-
-
-# plot beeswarm
-plotDAbeeswarm(da_results_status_anno, group.by = "NhoodGroup") + 
-  ggtitle(paste0("overlap = ", overlap.var, " max LFC delta = ", max.fc.delta.var))
-
-dev.copy(pdf, paste0(output.dir, "Beeswarm_nhood_groups_DiseaseStatus.pdf"))
-dev.off()
-
-# unsure what is happening but looks like some nhood groups contain nhoods which are DA in different directions. this should not be occuring 
-
-
-# plot on nhood groups on umap projection 
-p1 <- plotNhoodGroups(HL.sce, da_results_status_anno, layout = "UMAP") + NoLegend()
-
-nh_graph_status + p1 + patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_nhood_groups_DiseaseStatus.pdf"))
-dev.off()
-
-
-# seurat clusters already offers a decent grouping of nhoods, perhaps use this or more refined clustering from seurat package to define nhood groups
-plotDAbeeswarm(da_results_status_anno, "seurat_clusters")
-
-
-# note, need at least 2 neighbourhoods assigned to each group for further processing 
-
-
-##################################################
-# finding gene signatures for neighbourhoods
-##################################################
-
-# restrict to only highly variable genes 
-
-## Exclude zero counts genes
-keep.rows <- rowSums(logcounts(HL.sce)) != 0
-HL.sce <- HL.sce[keep.rows, ]
-
-## Find HVGs
-set.seed(101)
-dec <- scran::modelGeneVar(HL.sce)
-hvgs <- scran::getTopHVGs(dec, n = 2000)
-head(hvgs)
-
-
-
-# We run findNhoodGroupMarkers to test for one-vs-all differential gene expression for each neighbourhood group
-
-# use seurat groups 
-#da_results_status_anno$NhoodGroup <- da_results_status_anno$seurat_clusters
-
-#da_results_status_anno <- da_results_status_anno %>%
-# filter(NhoodGroup != "Mixed")
-
-#da_results_status_anno$NhoodGroup <- droplevels(da_results_status_anno$NhoodGroup)
-
-set.seed(42)
-
-nhood_markers <- findNhoodGroupMarkers(HL.sce, 
-                                       da_results_status_anno, 
-                                       subset.row = hvgs, 
-                                       aggregate.samples = TRUE, 
-                                       sample_col = "SampleID")
-
-head(nhood_markers)
-table(da_results_status_anno$NhoodGroup, da_results_status_anno$celltype.l1)
-
-# inspect degs of nhood group1
-# which had many downregulated nhoods
-
-
-
-## ANALYSIS WRITTEN UP TO HERE 
-
-
-
-
-
-
-
-
-
-nhood_markers %>%
-  filter(adj.P.Val_13 < 0.05) %>%
-  arrange(desc(logFC_13)) %>%
-  select(c(GeneID, logFC_13, adj.P.Val_13))
-
-# visualise detexted markers 
-# select markers for group 1 at FDR 1% and logFC > 1
-table(nhood_markers$adj.P.Val_13 < 0.01) # 35 genes
-
-ggplot(nhood_markers, aes(logFC_13, -log10(adj.P.Val_13))) + 
-  geom_point(alpha=0.5, size=0.5) +
-  geom_hline(yintercept = 3)
-
-
-markers <- nhood_markers$GeneID[nhood_markers$adj.P.Val_13 < 0.01 & nhood_markers$logFC_13 > 0]
-
-
-set.seed(42)
-plotNhoodExpressionGroups(HL.sce, da_results_status_anno, features=intersect(rownames(HL.sce), markers[1:10]),
-                          #subset.nhoods = da_results$NhoodGroup %in% c(1, 2, 3), 
-                          scale = TRUE,
-                          grid.space = "fixed")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#DGE testing within a group
-
-# In some cases you might want to test for differential expression between cells in different conditions within the same neighbourhood group. You can do that using testDiffExp:
-
-#dge_6 <- testDiffExp(embryo_milo, da_results, design = ~ stage, meta.data = data.frame(colData(embryo_milo)),
-#                    subset.row = rownames(embryo_milo)[1:5], subset.nhoods=da_results$NhoodGroup=="6")
-
-#dge_6
+# # create output dir
+# output.dir <- paste0("results/CD45Pos_cluster_vs_azimuth/")
+# 
+# if(!dir.exists(output.dir)){
+#   dir.create(output.dir, 
+#              recursive = T)
+#   
+# }
+# 
+# 
+# #############################
+# # cluster by annotation 
+# #############################
+# 
+# # large grain annotation
+# 
+# # broad annotation 
+# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
+# # as opposed to clusters 50/50 split between annotations 
+# 
+# 
+# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
+# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l1, CD45pos.seurat@meta.data$seurat_clusters)
+# cluster.totals <- colSums(x)
+# y <- sweep(x, 2, cluster.totals, FUN = "/")
+# y <- y*100
+# y <- as.data.frame(y)
+# 
+# 
+# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
+# 
+# for(i in seq_along(cluster.id)){
+#   
+#   y.filt <- y %>%
+#     filter(Var2 == cluster.id[i])
+#   
+#   
+#   library(ggplot2)
+#   
+#   p1 <- ggplot(y.filt) +
+#     aes(x = Var1, y = Freq, fill = Var1) +
+#     geom_col() +
+#     scale_fill_hue(direction = 1) +
+#     labs(title = paste0("Cluster ", cluster.id[i])) +
+#            coord_flip() +
+#            theme_minimal() +
+#            theme(legend.position = "none") +
+#            ylim(0, 100)
+#          
+#          print(p1)
+#          
+#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_broad_azimuth_annotation_freq.pdf"))
+#          dev.off()
+#          
+# }
+# 
+# 
+# #############################
+# # medium grain annotation 
+# #############################
+# 
+# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
+# # as opposed to clusters 50/50 split between annotations 
+# 
+# 
+# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
+# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l2, CD45pos.seurat@meta.data$seurat_clusters)
+# cluster.totals <- colSums(x)
+# y <- sweep(x, 2, cluster.totals, FUN = "/")
+# y <- y*100
+# y <- as.data.frame(y)
+# 
+# 
+# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
+# 
+# for(i in seq_along(cluster.id)){
+#   
+#   y.filt <- y %>%
+#     filter(Var2 == cluster.id[i])
+#   
+#   
+#   library(ggplot2)
+#   
+#   p1 <- ggplot(y.filt) +
+#     aes(x = Var1, y = Freq, fill = Var1) +
+#     geom_col() +
+#     scale_fill_hue(direction = 1) +
+#     labs(title = paste0("Cluster ", cluster.id[i])) +
+#            coord_flip() +
+#            theme_minimal() +
+#            theme(legend.position = "none") +
+#            ylim(0, 100)
+#          
+#          print(p1)
+#          
+#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_medium_grain_azimuth_annotation_freq.pdf"))
+#          dev.off()
+#          
+# }
+# 
+# #############################
+# # fine grain annotation 
+# #############################
+# 
+# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
+# # as opposed to clusters 50/50 split between annotations 
+# 
+# 
+# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
+# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l3, CD45pos.seurat@meta.data$seurat_clusters)
+# cluster.totals <- colSums(x)
+# y <- sweep(x, 2, cluster.totals, FUN = "/")
+# y <- y*100
+# y <- as.data.frame(y)
+# 
+# 
+# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
+# 
+# for(i in seq_along(cluster.id)){
+#   
+#   y.filt <- y %>%
+#     filter(Var2 == cluster.id[i])
+#   
+#   
+#   library(ggplot2)
+#   
+#   p1 <- ggplot(y.filt) +
+#     aes(x = Var1, y = Freq, fill = Var1) +
+#     geom_col() +
+#     scale_fill_hue(direction = 1) +
+#     labs(title = paste0("Cluster ", cluster.id[i])) +
+#            coord_flip() +
+#            theme_minimal() +
+#            theme(legend.position = "none") +
+#            ylim(0, 100)
+#          
+#          print(p1)
+#          
+#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_fine_grain_azimuth_annotation_freq.pdf"))
+#          dev.off()
+#          
+# }
+# 
+# 
+# 
+# 
+# 
+# 
+# ########################################################
+# # Use gene expression profiles to investigate clusters
+# ########################################################
+# 
+# 
+# # aggregate expression for heatmap visualisation
+# 
+# pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
+#                                       assays = "SCT",
+#                                       return.seurat = TRUE, 
+#                                       group.by = c("seurat_clusters"))
+# 
+# 
+# 
+# # load deg data
+# CD45Pos.de <- read.csv("results/CD45Pos_DEG_analysis/CD45Pos_DEGs.csv")
+# 
+# 
+# 
+# # some clusters were easily annotated based on overlap and call by azimuth reference 
+# # some are ambiguous 
+# # inspect gene expression profiles for these ambiguous clusters
+# 
+# # this section was done interactively comparing previous plots with visualising certain genes and DEG for each cluster
+# 
+# grep("FCGR", rownames(pseudo.cd45pos), value = T)
+# 
+# 
+# goi <- CD45Pos.de %>%
+#   filter(p_val_adj < 0.05) %>%
+#   group_by(cluster) %>%
+#   filter(cluster == 10) %>%
+#   top_n(50, avg_log2FC) %>%
+#   pull(gene)
+# 
+# goi
+#   
+#   DoHeatmap(pseudo.cd45pos, 
+#           features = goi, 
+#           draw.lines = FALSE, 
+#           raster = FALSE)
+# 
+# 
+# scCustomize::Cluster_Highlight_Plot(CD45pos.seurat, cluster_name = 25, reduction = "umap")
+# 
+# VlnPlot_scCustom(CD45pos.seurat, features = "IL2RA", pt.size = 0.1)
+# 
+# 
+# 
+# 
+# ######################################################
+# # using all above plots annotation definitions are 
+# ######################################################
+# 
+# # broad annotations
+# # cluster annotations 
+# myeloid.clusters <- c(0)
+# mono.clusters <- c(2, 4, 6, 7, 9, 12, 13, 14, 15, 17, 19, 20, 21, 22, 24)
+# dc.clusters <- c(11, 18, 26)
+# 
+# bcell.clusters <- c(5)
+# erythrocyte.clusters <- c(27)
+# 
+# t.cell.clusters <- c(1, 3, 23)
+# nk.clusters <- c(8, 16)
+# nk.or.t.cell.clusters <- c(10, 25) # as in ambig if nk or t or nkt
+# 
+# 
+# # fine grain annotations
+# cd14.mono.clusters <- c(2, 4, 6, 9, 14, 20, 22)
+# cd16.mono.clusters <- c(13, 17)
+# 
+# pDC.clusters <- c(26)
+# cDC1.clusters <- c(18)
+# cDC2.clusters <- c(11)
+# 
+# cd8.clusters <- c(3)
+# cd4.clusters <- c(23)
+# 
+# 
+# 
+# 
+# #
+# # Cluster 23 might be treg cd4
+# 
+# 
+# ############################################################
+# # Define clusters based on above data and interpretation
+# ############################################################
+# 
+# 
+# CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
+#   dplyr::mutate(Anno_l1 = case_when(seurat_clusters %in% myeloid.clusters ~ paste0("Myeloid_", seurat_clusters), 
+#                                     seurat_clusters %in% mono.clusters ~ paste0("Monocyte_", seurat_clusters), 
+#                                     seurat_clusters %in% dc.clusters ~ paste0("DC_", seurat_clusters), 
+#                                     seurat_clusters %in% bcell.clusters ~ paste0("Bcell_", seurat_clusters), 
+#                                     seurat_clusters %in% erythrocyte.clusters ~ paste0("Erythrocyte_", seurat_clusters), 
+#                                     seurat_clusters %in% t.cell.clusters ~ paste0("Tcell_", seurat_clusters), 
+#                                     seurat_clusters %in% nk.clusters ~ paste0("NK_", seurat_clusters), 
+#                                     seurat_clusters %in% nk.or.t.cell.clusters ~ paste0("NKorTcell_", seurat_clusters), 
+#                                     TRUE ~ seurat_clusters), 
+#                 Anno_l2 = case_when(seurat_clusters %in% cd14.mono.clusters ~ paste0("CD14_Mono_", seurat_clusters),
+#                                     seurat_clusters %in% cd16.mono.clusters ~ paste0("CD16_Mono_", seurat_clusters),
+#                                     seurat_clusters %in% pDC.clusters ~ paste0("pDC_", seurat_clusters),
+#                                     seurat_clusters %in% cDC1.clusters ~ paste0("cDC1_", seurat_clusters),
+#                                     seurat_clusters %in% cDC2.clusters ~ paste0("cDC2_", seurat_clusters),
+#                                     seurat_clusters %in% cd8.clusters ~ paste0("CD8T_", seurat_clusters),
+#                                     seurat_clusters %in% cd4.clusters ~ paste0("CD4T_", seurat_clusters),
+#                                     TRUE ~ Anno_l1))
+# 
+# 
+# ##############################
+# # visualise annotations 
+# ##############################
+# 
+# # create output dir
+# output.dir <- paste0("results/CD45Pos_cluster_annotations/")
+# 
+# if(!dir.exists(output.dir)){
+#   dir.create(output.dir, 
+#              recursive = T)
+#   
+# }
+# 
+# 
+# DimPlot_scCustom(CD45pos.seurat, 
+#                  label = TRUE,
+#                  group.by = "Anno_l1", 
+#                  reduction = "umap") + NoLegend()
+# 
+# dev.copy(pdf, paste0(output.dir, "UMAP_clusters_annotated_l1.pdf"))
+# dev.off()
+# 
+# 
+# DimPlot_scCustom(CD45pos.seurat, 
+#                  label = TRUE,
+#                  group.by = "Anno_l2", 
+#                  reduction = "umap") + NoLegend()
+# 
+# dev.copy(pdf, paste0(output.dir, "UMAP_clusters_annotated_l2.pdf"))
+# dev.off()
+# 
+# 
+# 
+# # save seurat object after annotation 
+# SaveSeuratRds(CD45pos.seurat, 
+#               file = "saves/Nils_seurat_CD45Pos.rds")
+# }
+
+
+
+
+# for insight into markers can use the below resource 
+# load cell marker info from CellMarker2.0 (http://bio-bigdata.hrbmu.edu.cn/CellMarker/index.html)
+# cellmarkers <- readxl::read_xlsx("data/Misc/Cell_marker_All.xlsx")
+# 
+# unique(cellmarkers$tissue_class)
+# 
+# # filter
+# mouse.normal <- cellmarkers %>%
+#   filter(species == "Mouse") %>%
+#   filter(cell_type == "Normal cell")
+# 
+# unique(mouse.normal$cell_name)
+# 
+# 
+# Tcell.markers <- mouse.normal %>%
+#   filter(grepl("Natural killer", cell_name)) %>%
+#   distinct(Symbol)
+# 
+# print(Tcell.markers, n = 100)
 
 
 ```
 
-
-### Plot frequency stats
-```{r freq_stats}
-
-stat.vals <- scCustomize::Cluster_Stats_All_Samples(Nils.seurat$CD45Pos, group_by_var = "Treatment")
-
-stat.vals
-
-
-
-```
-
-
-
-## DEG between treatment and vehicle {.tabset}
-# write to iterate over clusters
-
-### DEG analysis CD45Pos dataset treatment vs vehicle
-```{r DEG_CD45Pos_treatment}
-
-# create output dir
-output.dir <- paste0("results/CD45Pos_DEG_analysis_treatment_vs_vehicle/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-Nils.seurat$CD45Pos <- PrepSCTFindMarkers(Nils.seurat$CD45Pos)
-
-# set assay
-DefaultAssay(Nils.seurat$CD45Pos) <- "SCT"
-
-
-# set idents
-Idents(Nils.seurat$CD45Pos) <- "seurat_clusters"
-
-Nils.seurat$CD45Pos@meta.data$Treatment_cluster <- paste0(Nils.seurat$CD45Pos@meta.data$Treatment, "_", Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-Idents(Nils.seurat$CD45Pos) <- "Treatment_cluster"
-unique(Idents(Nils.seurat$CD45Pos))
-
-
-
-Nils.seurat$CD45Pos@meta.data$Treatment_anno <- paste0(Nils.seurat$CD45Pos@meta.data$Treatment, "_", Nils.seurat$CD45Pos@meta.data$predicted.celltype.l2)
-Idents(Nils.seurat$CD45Pos) <- "Treatment_anno"
-unique(Idents(Nils.seurat$CD45Pos))
-
-
-
-
-clust.id <- "CD14 Mono"
-deg.list <- FindMarkers(Nils.seurat$CD45Pos,
-                        ident.1 = paste0("PDS_", clust.id),
-                        ident.2 = paste0("Vehicle_", clust.id),
-                        assay = "SCT",
-                        only.pos = TRUE, 
-                        verbose = TRUE)
-
-
-
-deg.list %>%
-  filter(p_val_adj < 0.05)
-
-
-
-
-
-
-
-
-# save to file 
-#write.csv(CD45Pos.de, paste0(output.dir, "CD45Pos_DEGs.csv"))
-
-
-# aggregate expression for heatmap visualisation
-
-pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("Treatment_anno"))
-
-
-
-goi <- deg.list %>%
-  filter(p_val_adj < 0.05) %>%
-  top_n(20, avg_log2FC) %>%
-  rownames()
-Idents(pseudo.cd45pos)
-pseudo.cd45pos <- subset(pseudo.cd45pos, idents = c("PDS-CD14 Mono", "Vehicle-CD14 Mono"))
-pseudo.cd45pos <- ScaleData(pseudo.cd45pos)
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE) + NoLegend()
-
-#dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_pseudobulk.pdf"))
-#dev.off()
-
-VlnPlot_scCustom(Nils.seurat$CD45Pos,
-                 features = c("ISG20"), 
-                 group.by = "Treatment_anno", 
-                 idents = c("PDS_CD14 Mono", "Vehicle_CD14 Mono"))
-
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-### CELL CYCLE
-```{r remedy001}
-
-
-# cell cycle scoring 
-s.genes <- cc.genes$s.genes
-g2m.genes <- cc.genes$g2m.genes
-
-
-HL.seurat <- CellCycleScoring(HL.seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
-
-head(HL.seurat@meta.data)
-scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "S.Score", reduction = "umap.cca.sct")
-scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "G2M.Score", reduction = "umap.cca.sct")
-
-
-
-
-```
 
 
 
