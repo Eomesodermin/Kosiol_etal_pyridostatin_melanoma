@@ -317,3 +317,5 @@ data/G4_outs/analysis/diffexp/gene_expression_kmeans_6_clusters/differential_exp
 data/G4_outs/filtered_feature_bc_matrix.h5 filter=lfs diff=lfs merge=lfs -text
 data/H4_outs/analysis/diffexp/gene_expression_kmeans_2_clusters/differential_expression.csv filter=lfs diff=lfs merge=lfs -text
 saves/Nils_seurat_CD45Pos.h5Seurat filter=lfs diff=lfs merge=lfs -text
+saves/Nils_seurat_CD45Pos_integrated.rds filter=lfs diff=lfs merge=lfs -text
+saves/Nils_seurat_CD45Neg_integrated.rds filter=lfs diff=lfs merge=lfs -text

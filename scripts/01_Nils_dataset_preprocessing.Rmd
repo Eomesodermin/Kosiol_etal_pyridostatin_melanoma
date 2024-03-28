@@ -99,7 +99,7 @@ gc() # Free memory
 # pipeline variables
 long.compute <- TRUE
 do.plot <- TRUE
-quick.load <- TRUE
+quick.load <- FALSE
 
 # Establish working directory
 library("rstudioapi")
@@ -280,7 +280,6 @@ if(long.compute){
 }
 
 
-
 ```
 
 
@@ -385,163 +384,6 @@ if(long.compute){
 
 
 ```
-
-
-
-### Temp
-# read bam files and inspect bam alignment to OVAL
-```{r}
-
-
-# 
-#  setwd("/Users/ieo/Documents/Sequence_alignment/scRNAseq/Nils_10x_B16_ex_vivo_2024/SI-TT-E4_plus_OVAL_forward/outs")
-#  
-#  sequence.data <- Seurat::Read10X(data.dir = paste0("./raw_feature_bc_matrix"))
-#  sequence.data
-#  logic.var <- grepl("OVAL", rownames(sequence.data))
-#  rownames(sequence.data)[logic.var]
-#  x <- sequence.data[logic.var, ]
-#  sum(x)
-#  
-# # 
-#  
-#  
-#  seurat.temp <- CreateSeuratObject(counts = sequence.data,
-#                                    min.cells = 0,
-#                                    min.features = 0,
-#                                    project = "test")
-#      
-# 
-#grep("OVAL", rownames(seurat.temp), value = T)
-
-#logic.var <- grepl("OVAL", rownames(seurat.temp))
-#rownames(seurat.temp)[logic.var]
-
-# seurat.temp@assays$RNA@layers$counts[logic.var, ]
-
-
-#VlnPlot_scCustom(seurat.temp, "OVAL")
-
-
-
-
-# library(Rsamtools)
-# 
-# # Path to BAM file
-# bam_file <- "possorted_genome_bam.bam"
-# 
-# # Load BAM file and index
-# bam <- Rsamtools::BamFile(bam_file)
-# 
-# seqinfo(bam)
-# 
-# 
-# which <- GRanges(c(
-#     "OVAL:1-1875"
-# ))
-# ## equivalent:
-# ## GRanges(
-# ##     seqnames = c("seq1", "seq2", "seq2"),
-# ##     ranges = IRanges(
-# ##         start = c(1000, 100, 1000),
-# ##         end = c(2000, 1000, 2000)
-# ##     )
-# ## )
-# what <- c("qname", "rname", "strand", "pos", "qwidth", "mapq", "qual", "cigar", "flag", "seq")
-# param <- ScanBamParam(which=which, what=what)
-# 
-# aln <- scanBam(bam, param=param)
-# aln
-# count.vals <- countBam(bam, param=param)
-# count.vals
-# 
-# unique(aln$`OVAL:1-1875`$flag)
-# 
-# table(aln$`OVAL:1-1875`$pos)
-# 
-# #quickBamFlagSummary(bam)
-# 
-# 
-# 
-# 
-# 
-# 
-# #install.packages("rhdf5")
-# library(rhdf5)
-# 
-# 
-# # Specify the path to your HDF5 file
-# hdf5_file <- "molecule_info.h5"
-# 
-# # Open the HDF5 file
-# hdf5_data <- H5Fopen(hdf5_file)
-# 
-# # Read a dataset from the HDF5 file
-# dataset_name <- "features"
-# dataset <- h5read(hdf5_data, dataset_name)
-# 
-# dataset$name[dataset$name == "OVAL"]
-# 
-# # Close the HDF5 file when done
-# H5Fclose(hdf5_data)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# # Specify the path to your HDF5 file
-# hdf5_file <- "raw_feature_bc_matrix.h5"
-# 
-# # Open the HDF5 file
-# hdf5_data <- H5Fopen(hdf5_file)
-# 
-# # Read a dataset from the HDF5 file
-# dataset_name <- "matrix"
-# dataset <- h5read(hdf5_data, dataset_name)
-# dataset
-# dataset$data[dataset$features$name == "OVAL"]
-# 
-# 
-# # Close the HDF5 file when done
-# H5Fclose(hdf5_data)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# #aln <- scanBam(bam)
-# 
-# length(aln)
-# class(aln)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# Rsamtools::getSeq(bam)
-# 
-# 
-# # Extract alignments overlapping the gene
-# gene_alignments <- subset(bam, which(  # Use 'subset' to filter alignments
-#   seqnames(bam) == "chromosome_name" &  # Replace with chromosome name
-#   (start(bam) >= gene_coordinates[1] & end(bam) <= gene_coordinates[2])  # Filter by gene coordinates
-# ))
-
-
-```
-
 
 
 
@@ -896,31 +738,6 @@ if(long.compute){
   # perform sct and default/standard normalisation before cca integration to compare both normalisation methods 
   
   
-  #################################################################################
-  # quick prediction of cell annotations, useful to assess integration
-  #################################################################################
-  
-  # run azimuth only for CD45 compartment 
-  
-  
-  # load library
-  library("Azimuth")
-  
-  # set default assay
-  DefaultAssay(Nils.seurat$CD45Pos) <- "RNA"
-  
-  # Run azimuth
-  Nils.seurat$CD45Pos <- RunAzimuth(Nils.seurat$CD45Pos, reference = "pbmcref")
-  
-  Nils.seurat$CD45Pos
-  
-  Nils.seurat$CD45Pos@meta.data$predicted.celltype.l1
-  
-  # visualise results 
-  DimPlot(Nils.seurat$CD45Pos, reduction = "ref.umap", group.by = "predicted.celltype.l1")
-  DimPlot(Nils.seurat$CD45Pos, reduction = "ref.umap", group.by = "predicted.celltype.l2")
-  
-  
   
   # split object up based on sequencing run / in seurat V5 these are splitting the layers
   Nils.seurat$CD45Neg[["RNA"]] <- split(Nils.seurat$CD45Neg[["RNA"]],  f = Nils.seurat$CD45Neg$SampleID)
@@ -928,142 +745,69 @@ if(long.compute){
   
   
   
-  use.sct <- TRUE
+  #####################################################
+  # Normalise with scTransform and integrate data
+  #####################################################
+  # note error with more recent version of matrixStats resulting in "useNames = NA is defunct" error. downgrade to matrixStats version 1.1.0 as a workaround
+  # https://github.com/satijalab/seurat/issues/7501#issuecomment-1854571904
+  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts  
+  
+  DefaultAssay(Nils.seurat[[1]]) <- "RNA"
+  DefaultAssay(Nils.seurat[[2]]) <- "RNA"
+  
+  # note RNA assay is split into run level layers, below script will apply normalisation etc layer-wise
+  
+  # Normalise and scale with SCTransform v2
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = SCTransform, 
+                        method = "glmGamPoi", 
+                        vars.to.regress = "percent_mito", 
+                        vst.flavor = "v2",
+                        verbose = TRUE)
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = RunPCA, 
+                        reduction.name = "pca_sct")
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = RunUMAP, 
+                        reduction = "pca_sct", 
+                        dims = 1:30, 
+                        reduction.name = "umap.unintegrated.sct")
   
   
-  if(use.sct){
-    
-    #####################################################
-    # Normalise with scTransform and integrate data
-    #####################################################
-    # note error with more recent version of matrixStats resulting in "useNames = NA is defunct" error. downgrade to matrixStats version 1.1.0 as a workaround
-    # https://github.com/satijalab/seurat/issues/7501#issuecomment-1854571904
-    #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts  
-    
-    DefaultAssay(Nils.seurat[[1]]) <- "RNA"
-    DefaultAssay(Nils.seurat[[2]]) <- "RNA"
-    
-    # note RNA assay is split into run level layers, below script will apply normalisation etc layer-wise
-    
-    # Normalise and scale with SCTransform v2
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = SCTransform, 
-                          method = "glmGamPoi", 
-                          vars.to.regress = "percent_mito", 
-                          vst.flavor = "v2",
-                          verbose = TRUE)
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunPCA, 
-                          reduction.name = "pca_sct")
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunUMAP, 
-                          reduction = "pca_sct", 
-                          dims = 1:30, 
-                          reduction.name = "umap.unintegrated.sct")
-    
-    
-    DefaultAssay(Nils.seurat[[1]]) <- "SCT"
-    DefaultAssay(Nils.seurat[[2]]) <- "SCT"
-    
-    
-    # integrate layers using cca integration
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = IntegrateLayers, 
-                          orig.reduction = "pca_sct",
-                          new.reduction = "integrated.cca.sct",
-                          method = CCAIntegration,
-                          normalization.method = "SCT",
-                          verbose = F)
-    
-    
-    
-    # find clusters and dim reduction using integrated data
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = FindNeighbors, 
-                          dims = 1:30,
-                          reduction = "integrated.cca.sct")
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = FindClusters, 
-                          resolution = 1.5, 
-                          cluster.name = "clusters_cca_sct")
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunUMAP, 
-                          reduction = "integrated.cca.sct",
-                          dims = 1:30, 
-                          reduction.name = "umap.cca.sct")
-    
-    
-    
-  }else{
-    
-    
-    ############################
-    # standard normalisation 
-    ############################
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = NormalizeData)
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = FindVariableFeatures)
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = ScaleData)
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunPCA, 
-                          reduction.name = "pca")
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunUMAP, 
-                          reduction = "pca", 
-                          dims = 1:30, 
-                          reduction.name = "umap.unintegrated")
-    
-    
-    
-    
-    # # integrate layers using cca integration
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = IntegrateLayers, 
-                          method = CCAIntegration,
-                          orig.reduction = "pca",
-                          new.reduction = "integrated.cca",
-                          verbose = FALSE)
-    
-    
-    # # find clusters and dim reduction using integrated data
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = FindNeighbors, 
-                          reduction = "integrated.cca",
-                          dims = 1:30)
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = FindClusters, 
-                          resolution = 1.5,
-                          cluster.name = "clusters_cca")
-    
-    Nils.seurat <- lapply(Nils.seurat, 
-                          FUN = RunUMAP, 
-                          reduction = "integrated.cca",
-                          dims = 1:30, 
-                          reduction.name = "umap.cca")
-    
-    
-    
-    Nils.seurat$CD45Neg[["RNA"]] <- JoinLayers(Nils.seurat$CD45Neg[["RNA"]],  assay = "RNA")
-    Nils.seurat$CD45Pos[["RNA"]] <- JoinLayers(Nils.seurat$CD45Pos[["RNA"]],  assay = "RNA")
-    
-  }
+  DefaultAssay(Nils.seurat[[1]]) <- "SCT"
+  DefaultAssay(Nils.seurat[[2]]) <- "SCT"
   
   
+  # integrate layers using cca integration
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = IntegrateLayers, 
+                        orig.reduction = "pca_sct",
+                        new.reduction = "integrated.cca.sct",
+                        method = CCAIntegration,
+                        normalization.method = "SCT",
+                        verbose = F)
+  
+  
+  
+  # find clusters and dim reduction using integrated data
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = FindNeighbors, 
+                        dims = 1:30,
+                        reduction = "integrated.cca.sct")
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = FindClusters, 
+                        resolution = 1.5, 
+                        cluster.name = "clusters_cca_sct")
+  
+  Nils.seurat <- lapply(Nils.seurat, 
+                        FUN = RunUMAP, 
+                        reduction = "integrated.cca.sct",
+                        dims = 1:30, 
+                        reduction.name = "umap.cca.sct")
   
   
 }
@@ -1072,7 +816,6 @@ if(long.compute){
 ```
 
 ## evaluate integration 
-
 ```{r eval_integration}
 
 if(long.compute){
@@ -1080,7 +823,7 @@ if(long.compute){
   if(do.plot){
     
     # create output dir
-    output.dir <- paste0("results/integration/")
+    output.dir <- paste0("results/QC/integration/")
     
     if(!dir.exists(output.dir)){
       dir.create(output.dir, 
@@ -1088,18 +831,11 @@ if(long.compute){
       
     }
     
-    if(use.sct){
-      
-      unintegrated.reduction <- "umap.unintegrated.sct"
-      integrated.reduction <- "umap.cca.sct"
-      title.var <- "SCT"
-    }else{
-      
-      unintegrated.reduction <- "umap.unintegrated"
-      integrated.reduction <- "umap.cca"
-      title.var <- "Standard"
-      
-    }
+    
+    # set up variables
+    unintegrated.reduction <- "umap.unintegrated.sct"
+    integrated.reduction <- "umap.cca.sct"
+    title.var <- "SCT"
     
     
     # evaluate integration and dim reduction
@@ -1112,18 +848,9 @@ if(long.compute){
     
     
     
-    
     for(j in seq_along(names(Nils.seurat))){
       
-      if(names(Nils.seurat)[j] == "CD45Pos"){
-        vars.plot <- c("Treatment", "SampleID", "seurat_clusters", "predicted.celltype.l1", "predicted.celltype.l2")
-        
-      }else{
-        
-        vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
-        
-      }
-      
+      vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
       
       for(i in seq_along(vars.plot)){
         
@@ -1157,58 +884,27 @@ if(long.compute){
 ```
 
 
-### Doublet detection and removal \\ currently not done as packages are broken or not updated for seuratV5 assay
-```{r doublet_detection_and_removal}
-
-
-# would like to use DoubletFinder as I think this is a more elegant package for doublet detection 
-# however, seems DoubletFinder has not been updated to work with SeuratV5 and may have additional bugs preventing use by simply converting object to V3
-
-# scDblFinder also has issues - error = "as_cholmod_sparse" not provided by package "Matrix" 
-# seems to be an issue with Matrix and irlba packages. 
-# tried work arounds suggested on github pages, which essentially remove these packages and reinstall 
-# however error persists. 
-
-# therefore for now, dont identify doublets  
-
-
-
-```
-
-
-
 ### Save seurat object
 ```{r save_seurat_object}
 
 if(long.compute){
   
-  library("SeuratDisk")
-  
-  
-  # unsure why but error in trying to save as h5Seurat object
-  
-  # export and save seurat object
-  # SaveH5Seurat(Nils.seurat$CD45Pos,
-  #              filename = "saves/Nils_seurat_CD45Pos.h5Seurat",
-  #              overwrite = TRUE,
-  #              verbose = TRUE)
-  
-  # SaveH5Seurat(Nils.seurat$CD45Neg,
-  #              filename = "saves/Nils_seurat_CD45Neg.h5Seurat",
-  #              overwrite = TRUE, 
-  #              verbose = TRUE)
-  # 
-  
+  library("SeuratObject")
   
   SaveSeuratRds(Nils.seurat$CD45Pos, 
-                file = "saves/Nils_seurat_CD45Pos.rds")
+                file = "saves/Nils_seurat_CD45Pos_integrated.rds")
   
   SaveSeuratRds(Nils.seurat$CD45Neg, 
-                file = "saves/Nils_seurat_CD45Neg.rds")
+                file = "saves/Nils_seurat_CD45Neg_integrated.rds")
   
 }
 
 ```
+
+
+
+
+
 
 
 ## Cluster identification and UMAP optimisation {.tabset}
@@ -1222,7 +918,7 @@ if(long.compute){
   
   
   # create output dir
-  output.dir <- paste0("results/Cluster_optimisation/")
+  output.dir <- paste0("results/QC/Cluster_optimisation/")
   
   if(!dir.exists(output.dir)){
     dir.create(output.dir, 
@@ -1230,7 +926,7 @@ if(long.compute){
     
   }
   
-  
+  # inspect object
   Graphs(Nils.seurat$CD45Neg, slot = NULL)
   Neighbors(Nils.seurat$CD45Neg, slot = NULL)
   Reductions(Nils.seurat$CD45Neg, slot = NULL)
@@ -1253,10 +949,11 @@ if(long.compute){
   
   # explicitly use the SCT_snn graph calculated for finding clusters 
   
-  
+  ########################################################
   # Find clusters over an iteration of resolutions
+  ########################################################
   res.var <- 0
-  res.max <- 2.5
+  res.max <- 2
   while (res.var <= res.max) {
     
     
@@ -1267,9 +964,15 @@ if(long.compute){
     res.var = res.var + 0.1
   }
   
+  
+  ############################
+  # Visualise cluster tree
+  ############################
+  
   # Use clustree package to visualise impact of cluster resolution on clusters determined
   
-  #install.packages("clustree")
+  # load package
+  # install.packages("clustree")
   library(clustree) # clusttree needs to be loaded, error occurs if just call function from namespace
   
   head(Nils.seurat[[2]][[]])
@@ -1288,7 +991,10 @@ if(long.compute){
   }
   
   
-  # also visualise clusters using UMAP dims 
+  ###############################
+  # Visualise clusters on UMAP
+  ###############################
+  
   for(i in seq_along(names(Nils.seurat))){
     
     res.var <- 0
@@ -1312,22 +1018,21 @@ if(long.compute){
     
   }
   
-  # use annotation on CD45pos dataset as a way to roughly estimate clustering /overclustering 
-  table(Nils.seurat$CD45Pos@meta.data$predicted.celltype.l1, Nils.seurat$CD45Pos@meta.data$SCT_snn_res.1.3)
   
+  ##################################################
+  # Set resolution level | and set seurat_clusters
+  ##################################################
   
-  
-  
-  # note resolution of 1.3 looks relatively ok for both datasets 
-  # will use this until further annotation of clusters and refinement is done
-  # assuming this is overclustering and can reduce clustering later
+ # emperically picked resolution of: 
+  # CD45Pos = 0.5
+  # CD45Neg = 0.4
   
   # set seurat clusters to this level 
-  Nils.seurat[[1]]@meta.data$seurat_clusters <- Nils.seurat[[1]]@meta.data$SCT_snn_res.1.3
-  Nils.seurat[[2]]@meta.data$seurat_clusters <- Nils.seurat[[2]]@meta.data$SCT_snn_res.1.3
+  Nils.seurat$CD45Pos@meta.data$seurat_clusters <- Nils.seurat$CD45Pos@meta.data$SCT_snn_res.0.5
+  Nils.seurat$CD45Neg@meta.data$seurat_clusters <- Nils.seurat$CD45Neg@meta.data$SCT_snn_res.0.4
   
-  length(unique(Nils.seurat[[1]]@meta.data$seurat_clusters)) # 28 clusters
-  length(unique(Nils.seurat[[2]]@meta.data$seurat_clusters)) # 23 clusters
+  length(unique(Nils.seurat$CD45Pos@meta.data$seurat_clusters)) # 16 clusters
+  length(unique(Nils.seurat$CD45Neg@meta.data$seurat_clusters)) # 12 clusters
   
   
   
@@ -1337,7 +1042,7 @@ if(long.compute){
           label = T,
           group.by = c("seurat_clusters")) + 
     NoLegend() + 
-    ggtitle("SCT_snn_res.1.3")
+    ggtitle("SCT_snn_res.0.5")
   
   dev.copy(pdf, paste0(output.dir, "UMAP_CD45Pos_dataset_seurat_clusters.pdf"))
   dev.off()
@@ -1348,7 +1053,7 @@ if(long.compute){
           label = T,
           group.by = c("seurat_clusters")) + 
     NoLegend() + 
-    ggtitle("SCT_snn_res.1.3")
+    ggtitle("SCT_snn_res.0.4")
   
   dev.copy(pdf, paste0(output.dir, "UMAP_CD45Neg_dataset_seurat_clusters.pdf"))
   dev.off()
@@ -1365,15 +1070,13 @@ if(long.compute){
   
   
   # create output dir
-  output.dir <- paste0("results/UMAP_optimisation/")
+  output.dir <- paste0("results/QC/UMAP_optimisation/")
   
   if(!dir.exists(output.dir)){
     dir.create(output.dir, 
                recursive = T)
     
   }
-  
-  
   
   
   # Optimise UMAP projection 
@@ -1385,18 +1088,10 @@ if(long.compute){
   neigh.step = 20
   
   
-  
   for(i in seq_along(names(Nils.seurat))){
     
-    if(names(Nils.seurat)[i] == "CD45Pos"){
-      
-      grouping.var <- "predicted.celltype.l2"
-      
-    }else{
-      
-      grouping.var <- "seurat_clusters"
-      
-    }
+    grouping.var <- "seurat_clusters"
+    
     min.dist.val <- init.min.dist
     
     # start loop 
@@ -1445,14 +1140,17 @@ if(long.compute){
     
   }
   
+  ###########################################
+  # Calculate UMAP using optimised params
+  ###########################################
   
-  
-  # calculate UMAP using default params 
+  # just use default params
   
   Nils.seurat <- lapply(Nils.seurat, 
                         FUN = RunUMAP,
                         reduction = "integrated.cca.sct",
                         dims = 1:30)
+  
   
 }
 
@@ -1463,23 +1161,7 @@ if(long.compute){
 
 if(long.compute){
   
-  library("SeuratDisk")
-  
-  
-  # unsure why but error in trying to save as h5Seurat object
-  
-  # export and save seurat object
-  # SaveH5Seurat(Nils.seurat$CD45Pos,
-  #              filename = "saves/Nils_seurat_CD45Pos.h5Seurat",
-  #              overwrite = TRUE, 
-  #              verbose = TRUE)
-  # 
-  # SaveH5Seurat(Nils.seurat$CD45Neg,
-  #              filename = "saves/Nils_seurat_CD45Neg.h5Seurat",
-  #              overwrite = TRUE, 
-  #              verbose = TRUE)
-  # 
-  
+  library("SeuratObject")
   
   SaveSeuratRds(Nils.seurat$CD45Pos, 
                 file = "saves/Nils_seurat_CD45Pos.rds")
@@ -1493,463 +1175,15 @@ if(long.compute){
 
 
 
-## Overview of dataset {.tabset}
-
-### Broad overview of dataset
-```{r broad_overview}
-
-if(long.compute){
-  
-  if(do.plot){
-    
-    
-    # create output dir
-    output.dir <- paste0("results/overview_visualisation/")
-    
-    if(!dir.exists(output.dir)){
-      dir.create(output.dir, 
-                 recursive = T)
-      
-    }
-    
-    
-    for(i in seq_along(names(Nils.seurat))){
-      
-      
-      
-      # set assay
-      DefaultAssay(Nils.seurat[[i]]) <- "SCT"
-      
-      if(names(Nils.seurat)[i] == "CD45Pos"){
-        vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters", "predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3")
-      }else{
-        
-        vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters")
-        
-      }
-      for(j in seq_along(vars.to.plot)){
-        name.var <- gsub("\\.", "_", vars.to.plot[j])
-        
-        print(
-          scCustomize::DimPlot_scCustom(Nils.seurat[[i]],
-                                        reduction = "umap", 
-                                        label = TRUE,
-                                        figure_plot = TRUE,
-                                        group.by = vars.to.plot[j]) 
-        )
-        
-        
-        dev.copy(pdf, paste0(output.dir, names(Nils.seurat)[i], "_UMAP_", name.var, ".pdf"))
-        dev.off()
-        
-      }
-      
-    }
-    
-    
-  }
-}
 
 
 
-```
 
 
 
-## DEG and cluster annotation {.tabset}
+### Archive #####
+### Archive #####
 
-## Cluster annotation CD45Neg dataset
-```{r CD45Neg_data_cluster_annotation}
-
-if(long.compute){
-  output.dir <- "results/CD45Neg_SingleR/"
-  
-  # Create output directory
-  if(!dir.exists(paste0(output.dir))){
-    dir.create(paste0(output.dir), 
-               recursive = T)
-  }
-  
-  
-  # load required packages
-  library("SingleR")
-  library("celldex")
-  
-  ################################################################
-  # Use a couple databased to get broad overview of clusters 
-  ################################################################
-  
-  # error with collect() when trying to load celldex datasets
-  
-  # i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
-  # but im running r 4.2.3 and this would require 4.3
-  # not keen to upgrade right now 
-  # so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
-  
-  # need to downgrade to this version 
-  #devtools::install_version("dbplyr", version = "2.3.4")
-  #devtools::install_version("dbplyr", version = "2.4")
-  
-  # in theory if biocmanager is up to date, could just run below and should fix the problem
-  
-  #library(BiocManager) # 3.16
-  #install("BiocFileCache")
-  
-  ##################################
-  # Use MouseRNAseqData
-  ##################################
-  ?MouseRNAseqData()
-  ref.mouse <-  celldex::MouseRNAseqData()
-  
-  # need to ensure matrixStats is at version 1.1.0 
-  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
-  #BiocManager::install(version = "3.18")
-  
-  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
-  
-  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
-  # further split into 28 subtypes under label.fine 
-  
-  
-  # First calcualte cell ID using all available labels
-  SingleR.pred <- SingleR(test = Nils.seurat$CD45Neg@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = Nils.seurat$CD45Neg@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.fine)
-  
-  # Plot 
-  plotScoreHeatmap(SingleR.pred, 
-                   show_colnames = TRUE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"))
-  dev.off()
-  
-  
-  SingleR::plotDeltaDistribution(SingleR.pred)
-  
-  SingleR::plotScoreDistribution(SingleR.pred)
-  
-  
-  
-  SingleR.pred <- SingleR(test = Nils.seurat$CD45Neg@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = Nils.seurat$CD45Neg@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.main)
-  
-  # Plot 
-  plotScoreHeatmap(SingleR.pred, 
-                   show_colnames = TRUE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"))
-  dev.off()
-  
-  
-  ##################
-  # annotations
-  ##################
-  
-  # Cardiomyocytes = 21
-  # Granulocytes = 10
-  # Endothelial cells = 9, 11, 16, 17
-  # Erythrocytes or endothelial or fibroblasts = 22
-  # everything else looks fibroblast/adipocyte/NPC/microglial
-  # cluster 18 has high T and NK and immune signatures maybe contamination
-}
-
-```
-
-
-### DEG analysis CD45Neg dataset clusters
-```{r DEG_CD45Neg_clusters}
-
-if(long.compute){
-  # create output dir
-  output.dir <- paste0("results/CD45Neg_DEG_analysis/")
-  
-  if(!dir.exists(output.dir)){
-    dir.create(output.dir, 
-               recursive = T)
-    
-  }
-  
-  
-  Nils.seurat$CD45Neg <- PrepSCTFindMarkers(Nils.seurat$CD45Neg)
-  
-  # set assay
-  DefaultAssay(Nils.seurat$CD45Neg) <- "SCT"
-  
-  
-  # set idents
-  Idents(Nils.seurat$CD45Neg) <- "seurat_clusters"
-  
-  CD45Neg.de <- FindAllMarkers(Nils.seurat$CD45Neg,
-                               assay = "SCT",
-                               only.pos = TRUE, 
-                               verbose = TRUE)
-  
-  
-  # save to file 
-  write.csv(CD45Neg.de, paste0(output.dir, "CD45Neg_DEGs.csv"))
-  
-  
-  # aggregate expression for heatmap visualisation
-  
-  pseudo.cd45neg <- AggregateExpression(Nils.seurat$CD45Neg,
-                                        assays = "SCT",
-                                        return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters"))
-  
-  
-  
-  goi <- CD45Neg.de %>%
-    filter(p_val_adj < 0.05) %>%
-    group_by(cluster) %>%
-    top_n(10, avg_log2FC) %>%
-    pull(gene)
-  
-  
-  DoHeatmap(pseudo.cd45neg, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_pseudobulk.pdf"))
-  dev.off()
-  
-  
-  
-  
-  # iterate over the top degs for each cluster 
-  cluster.id <- unique(CD45Neg.de$cluster)
-  for(i in seq_along(cluster.id)){
-    
-    
-    print(cluster.id[i])
-    
-    goi <- CD45Neg.de %>%
-      filter(p_val_adj < 0.05) %>%
-      filter(cluster == cluster.id[i]) %>%
-      top_n(50, avg_log2FC)
-    
-    goi <- unique(goi)
-    
-    print(
-      DoHeatmap(pseudo.cd45neg, 
-                features = goi$gene, 
-                draw.lines = FALSE, 
-                raster = FALSE)
-    )
-    
-    dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
-    dev.off()
-    
-  }
-  
-  
-  # together with singleR prediction 
-  # which suggested cluster 18 is immune cells (T/NK cells)
-  # it does look like cluster 18 is immune cells, high for immune markers 
-  table(Nils.seurat$CD45Neg@meta.data$seurat_clusters) # cluster 18 = 265 cells
-  # cluster 10 is predicted to be granulocytes and is 619 cells
-  
-  # cluster 10 does indeed have many granulocyte type genes and is a strong unique signature 
-  
-  # consider removing cluster 10 and cluster 18
-  
-}
-
-```
-
-
-## Cluster annotation CD45Pos dataset
-```{r CD45Pos_data_cluster_annotation}
-
-if(long.compute){
-  output.dir <- "results/CD45Pos_SingleR/"
-  
-  # Create output directory
-  if(!dir.exists(paste0(output.dir))){
-    dir.create(paste0(output.dir), 
-               recursive = T)
-  }
-  
-  
-  # load required packages
-  library("SingleR")
-  library("celldex")
-  
-  ################################################################
-  # Use a couple databased to get broad overview of clusters 
-  ################################################################
-  
-  # error with collect() when trying to load celldex datasets
-  
-  # i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
-  # but im running r 4.2.3 and this would require 4.3
-  # not keen to upgrade right now 
-  # so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
-  
-  # need to downgrade to this version 
-  #devtools::install_version("dbplyr", version = "2.3.4")
-  #devtools::install_version("dbplyr", version = "2.4")
-  
-  # in theory if biocmanager is up to date, could just run below and should fix the problem
-  
-  #library(BiocManager) # 3.16
-  #install("BiocFileCache")
-  
-  
-  # need to ensure matrixStats is at version 1.1.0 
-  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
-  #BiocManager::install(version = "3.18")
-  
-  #####################
-  # Use ImmGenData
-  #####################
-  # Info: Mouse, Microarray, 830 samples, 20 main labels, 253 fine lables, Hematopoietic & Immune focus
-  
-  ImmGen.data <- celldex::ImmGenData()
-  
-  SingleR.pred <- SingleR(test = Nils.seurat$CD45Pos@assays$SCT$data, 
-                          ref = ImmGen.data, 
-                          method = "cluster",
-                          clusters = Nils.seurat$CD45Pos@meta.data$seurat_clusters,
-                          labels = ImmGen.data$label.fine)
-  
-  
-  # Plot 
-  plotScoreHeatmap(SingleR.pred, 
-                   show_colnames = TRUE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"))
-  dev.off()
-  
-  
-  
-  
-  SingleR.pred <- SingleR(test = Nils.seurat$CD45Pos@assays$SCT$data, 
-                          ref = ImmGen.data, 
-                          method = "cluster",
-                          clusters = Nils.seurat$CD45Pos@meta.data$seurat_clusters,
-                          labels = ImmGen.data$label.main)
-  
-  
-  # Plot 
-  plotScoreHeatmap(SingleR.pred, 
-                   show_colnames = TRUE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"))
-  dev.off()
-  
-}
-
-```
-
-
-### DEG analysis CD45Pos dataset clusters
-```{r DEG_CD45Pos_clusters}
-
-if(long.compute){
-  # create output dir
-  output.dir <- paste0("results/CD45Pos_DEG_analysis/")
-  
-  if(!dir.exists(output.dir)){
-    dir.create(output.dir, 
-               recursive = T)
-    
-  }
-  
-  
-  
-  Nils.seurat$CD45Pos <- PrepSCTFindMarkers(Nils.seurat$CD45Pos)
-  
-  # set assay
-  DefaultAssay(Nils.seurat$CD45Pos) <- "SCT"
-  
-  
-  # set idents
-  Idents(Nils.seurat$CD45Pos) <- "seurat_clusters"
-  
-  CD45Pos.de <- FindAllMarkers(Nils.seurat$CD45Pos,
-                               assay = "SCT",
-                               only.pos = TRUE, 
-                               verbose = TRUE)
-  
-  
-  # save to file 
-  write.csv(CD45Pos.de, paste0(output.dir, "CD45Pos_DEGs.csv"))
-  
-  
-  # aggregate expression for heatmap visualisation
-  
-  pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                        assays = "SCT",
-                                        return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters"))
-  
-  
-  
-  goi <- CD45Pos.de %>%
-    filter(p_val_adj < 0.05) %>%
-    group_by(cluster) %>%
-    top_n(10, avg_log2FC) %>%
-    pull(gene)
-  
-  
-  DoHeatmap(pseudo.cd45pos, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_pseudobulk.pdf"))
-  dev.off()
-  
-  
-  # iterate over the top degs for each cluster 
-  cluster.id <- unique(CD45Pos.de$cluster)
-  for(i in seq_along(cluster.id)){
-    
-    
-    print(cluster.id[i])
-    
-    goi <- CD45Pos.de %>%
-      filter(p_val_adj < 0.05) %>%
-      filter(cluster == cluster.id[i]) %>%
-      top_n(50, avg_log2FC)
-    
-    goi <- unique(goi)
-    
-    print(
-      DoHeatmap(pseudo.cd45pos, 
-                features = goi$gene, 
-                draw.lines = FALSE, 
-                raster = FALSE)
-    )
-    
-    dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
-    dev.off()
-    
-  }
-  
-  
-  # compare with azimuth annotation 
-  table(Nils.seurat$CD45Pos@meta.data$predicted.celltype.l1, Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-  
-  table(Nils.seurat$CD45Pos@meta.data$predicted.celltype.l2, Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-  table(Nils.seurat$CD45Pos@meta.data$predicted.celltype.l3, Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-  
-  # how big are clusters
-  x <- table(Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-  barplot(x, las = 2)
-  #write.csv(x, paste0())
-  
-  
-}
-
-
-```
 
 
 
@@ -2116,7 +1350,6 @@ if(long.compute){
 ```
 
 
-
 ## Renormalise / integrate / dim reduction | after removing contamination immune cells {.tabset}
 
 ## re-calculate normalisation and integration for CD45Neg dataset
@@ -2185,6 +1418,7 @@ if(long.compute){
 
 
 ```
+
 
 ## plot integration after removing contamination immune cells from CD45Neg dataset 
 
@@ -2274,810 +1508,8 @@ if(long.compute){
 
 
 
+### Archive #####
 
-
-
-# move to cd45 pos and cd45neg specific scripts 
-
-
-## Melanocyte gene expression {.tabset}
-
-### investigate melanin specific genes
-```{r melanocyte_genes}
-
-
-# create output dir
-output.dir <- paste0("results/CD45_Neg_Melanin_genes/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-# Mitf, Tyr, Pmel, Mlana, Tyrp1, 
-# maybe = Sox10, 
-
-grep("Mit", rownames(Nils.seurat$CD45Neg), value = T)
-
-
-
-
-
-goi <- c("Mitf", "Tyr", "Pmel", "Mlana", "Tyrp1", "Sox10")
-
-for(i in seq_along(goi)){
-  print(
-    scCustomize::FeaturePlot_scCustom(Nils.seurat$CD45Neg, 
-                                      reduction = "umap", 
-                                      features = goi[i])
-    
-  )
-  
-  dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_", goi[i], ".pdf"))
-  dev.off()
-  
-}
-
-
-
-scCustomize::FeaturePlot_scCustom(Nils.seurat$CD45Pos, 
-                                  reduction = "umap", 
-                                  features = "SOX10")
-
-
-
-Nils.seurat$CD45Pos@meta.data$nCount_RNA
-
-p1 <- DimPlot_scCustom(Nils.seurat$CD45Pos, reduction = "umap", group.by = "predicted.celltype.l2", label = T)
-p2 <- scCustomize::Plot_Density_Custom(Nils.seurat$CD45Pos, reduction = "umap", features = "nCount_RNA")
-p1 | p2
-
-
-VlnPlot(Nils.seurat$CD45Neg, "Sox10")
-
-DimPlot_scCustom(Nils.seurat$CD45Neg, reduction = "umap")
-
-
-scCustomize::Plot_Density_Custom(Nils.seurat$CD45Neg, reduction = "umap", features = "Tyrp1")
-
-
-
-
-```
-
-
-
-
-
-
-
-
-## Which cell subsets are producing the chemokines {.tabset}
-
-## WORK IN PROGRESS
-### Vis chemokine/cytokine expression
-```{r chemokine_cytokine_expression}
-
-# create output dir
-output.dir <- paste0("results/chemo_cyto_expression/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-
-# aggregate expression for heatmap visualisation
-pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-
-pseudo.cd45neg <- AggregateExpression(Nils.seurat$CD45Neg,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-
-
-# identify chemokines/cytokines of interest
-goi <- grep("^IL.*", rownames(pseudo.cd45pos), value = T)
-goi
-
-
-goi <- grep("^IF.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^CX.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^GZ.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi
-
-
-
-goi <- c("IL1B", "IL6", "IFNG", "TNF", "CCL2", "CCL3", "CCL4", "CCL5", "CXCL1", "CXCL9", "CXCL10", "CXCL13")
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-
-head(Nils.seurat$CD45Pos@meta.data)
-scCustomize::DimPlot_scCustom(Nils.seurat$CD45Pos,
-                              group.by = "predicted.celltype.l2", 
-                              reduction = "umap",
-                              label = T)
-
-scCustomize::FeaturePlot_scCustom(Nils.seurat$CD45Pos,
-                                  feature = "IL7R", 
-                                  reduction = "umap")
-
-
-
-
-
-
-
-
-
-goi <- grep("^Il1b.*", rownames(pseudo.cd45neg), value = T)
-goi
-
-
-goi <- c("Il1b", "Il6", "Ifng", "Tnf")
-goi <- c("Ccl2", "Ccl3", "Ccl4", "Ccl5")
-goi <- c("Cxcl1", "Cxcl9", "Cxcl10", "Cxcl13")
-DoHeatmap(pseudo.cd45neg, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-#dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
-#dev.off()
-
-
-# key genes
-# IL1b, IL6, IL12, IFNG, TNFA, 
-
-# CCL2,3,4,5 
-# CXCL1, CXCL9,10,13 
-
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-# NOT WORKING - check all code 
-## Difference between treatment and vehicle {.tabset}
-# Cant really do DA without replicate samples 
-
-### Differential Abundance testing
-```{r Differential_Abundance_testing}
-
-#BiocManager::install("miloR")
-
-library("miloR")
-library("SingleCellExperiment")
-library("scater")
-library("scran")
-
-
-#############################################
-# Perform analysis for CD45Pos dataset
-#############################################
-
-
-# set assay
-DefaultAssay(Nils.seurat$CD45Pos) <- "SCT"
-
-
-
-# create output dir
-output.dir <- paste0("results/DA_analysis_CD45Pos/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-
-
-# Note: 
-# milo object capatilises lots of variables, ie umap = UMAP
-# below is method was used before i realised this, keeping for reference 
-# some error in buildGraph() call prevents specifiying to use integrated.cca as reduced.dim, so it recalculates PCA, therefore rewrite PCA to be integrated.cca
-#HL.seurat[["pca"]] <- CreateDimReducObject(embeddings = HL.seurat[["integrated.cca"]]@cell.embeddings, key = "PC_ ", assay = DefaultAssay(HL.seurat))
-#names of dim reductions get capatilized for some reason, therefore reduced.dim = "INTEGRATED.CCA"
-
-
-#######################
-# Create milo object
-#######################
-
-# create single cell experiment object
-CD45Pos.sce <- Seurat::as.SingleCellExperiment(Nils.seurat[["CD45Pos"]],
-                                               assay = "SCT")
-
-# convert object into a milo object
-CD45Pos.sce <- Milo(CD45Pos.sce)
-CD45Pos.sce
-
-
-
-#######################
-# Create KNN graph
-#######################
-
-# use nn graph generated as part of seurat pipeline
-Graphs(CD45Pos.sce, slot = NULL)
-Neighbors(CD45Pos.sce, slot = NULL)
-Reductions(CD45Pos.sce, slot = NULL)
-
-
-CD45Pos.sce@graph$SCT_nn <- Nils.seurat[["CD45Pos"]]@graphs$SCT_nn
-
-
-# build from the adjacency matrix
-milo.graph <- miloR::buildFromAdjacency(CD45Pos.sce@graph$SCT_nn)
-
-# append graph to milo object
-CD45Pos.sce@graph <- milo.graph@graph
-
-
-# set some global-ish variables 
-k.parm.use <- 20
-d.use <- 50
-
-
-# conversly, recaculate knn graph 
-#HL.sce <- buildGraph(HL.sce,
-#                 k = k.parm.use,
-#                  d = 30, 
-#            reduced.dim = "INTEGRATED.CCA")
-
-
-########################
-# make Neighbourhoods
-########################
-
-CD45Pos.sce <- makeNhoods(CD45Pos.sce,
-                          prop = 0.1,
-                          k = k.parm.use, # default for seurat findneighbours is k.parm = 20
-                          d = d.use, # dim reduction integrated.cca is 50 dims
-                          reduced_dims = "INTEGRATED.CCA.SCT",
-                          refined = TRUE, 
-                          refinement_scheme = "graph") # make nhoods using graph-only as this is faster
-
-# Rule of thumb, aim for average neighbourhood size over 5*n_samples 
-# therefore 5*10 = 50
-#Empirically, we found it’s best to have a distribution peaking between 50 and 100
-
-
-plotNhoodSizeHist(CD45Pos.sce, bins = 100)
-
-dev.copy(pdf, paste0(output.dir, "Neighbourhood_size_histogram.pdf"))
-dev.off()
-
-
-########################
-# count cells 
-########################
-
-CD45Pos.sce <- countCells(CD45Pos.sce, 
-                          meta.data = data.frame(colData(CD45Pos.sce)),
-                          samples = "Treatment") # make the nhood X sample counts matrix
-
-head(nhoodCounts(CD45Pos.sce))
-
-##############################
-# calculate nhood distance
-##############################
-
-# longest compute time of this entire pipeline 
-CD45Pos.sce <- calcNhoodDistance(CD45Pos.sce, 
-                                 d = d.use, 
-                                 reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-####################################
-# Differential Abundance testing
-####################################
-
-# design model matrix for DA testing
-
-DA.design <- data.frame(colData(CD45Pos.sce))[,c("SampleID", "Treatment")]
-DA.design <- distinct(DA.design)
-rownames(DA.design) <- DA.design$SampleID
-
-## Reorder rownames to match columns of nhoodCounts(milo)
-DA.design <- DA.design[colnames(nhoodCounts(CD45Pos.sce)), , drop=FALSE]
-table(DA.design$SampleID)
-
-table(DA.design$Treatment)
-
-# create contrasts
-#contrast.1 <- c("Age1wk - Age4wk") # the syntax is <VariableName><ConditionLevel> - <VariableName><ControlLevel>
-contrast.status <- c("SampleIDPDS_CD45Pos - SampleIDVehicle_CD45Pos")
-
-
-# this is the edgeR code called by `testNhoods`
-# check it looks correct
-model <- model.matrix(~ 0 + SampleID, data=DA.design)
-mod.constrast <- makeContrasts(contrasts=contrast.status, levels=model)
-
-mod.constrast
-
-
-# perform DA test
-da_results_status <- testNhoods(CD45Pos.sce, 
-                                design = ~ SampleID,
-                                design.df = DA.design, 
-                                model.contrasts = contrast.status,
-                                fdr.weighting= "graph-overlap", 
-                                reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-
-
-
-
-# old single contrast code 
-
-# 
-matrix_design <- data.frame(colData(CD45Pos.sce))[,c("Treatment", "SampleID")]
-matrix_design
-# 
-# ## factorise Treatment
-matrix_design$Treatment <- as.factor(matrix_design$Treatment) 
-matrix_design <- distinct(matrix_design)
-rownames(matrix_design) <- matrix_design$Treatment
-
-matrix_design
-# 
-# 
-# # test nhoods for DA
-da_results <- testNhoods(CD45Pos.sce,
-                         design = ~ Treatment,
-                         design.df = matrix_design, 
-                         reduced.dim = "INTEGRATED.CCA.SCT")
-
-
-
-#######################
-# overview of results 
-#######################
-
-
-# how many nhoods are DA
-da_results_status %>%
-  filter(SpatialFDR < 0.05) %>%
-  arrange(SpatialFDR) %>%
-  head()
-
-table(da_results_status$SpatialFDR < 0.05) # 513 DA nhoods
-table(da_results_outcome$SpatialFDR < 0.05) # 3 DA nhoods
-
-length(da_results_status$Nhood) # 2,833 nhoods
-length(da_results_outcome$Nhood) # 2,833 nhoods
-
-# distribution of pvalue
-
-ggplot(da_results_status, aes(PValue)) + geom_histogram(bins=50)
-
-dev.copy(pdf, paste0(output.dir, "DA_result_pvalue_histogram_status.pdf"))
-dev.off()
-
-
-ggplot(da_results_outcome, aes(PValue)) + geom_histogram(bins=50)
-
-dev.copy(pdf, paste0(output.dir, "DA_result_pvalue_histogram_outcome.pdf"))
-dev.off()
-
-
-# volcano plots 
-
-
-ggplot(da_results_status, aes(logFC, -log10(SpatialFDR))) + 
-  geom_point() +
-  geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR
-
-dev.copy(pdf, paste0(output.dir, "DA_result_volcano_status.pdf"))
-dev.off()
-
-
-ggplot(da_results_outcome, aes(logFC, -log10(SpatialFDR))) + 
-  geom_point() +
-  geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR
-
-dev.copy(pdf, paste0(output.dir, "DA_result_volcano_outcome.pdf"))
-dev.off()
-
-
-
-
-head(da_results)
-
-######################################################
-# visualise nhoods on umap projection
-######################################################
-
-# Build nhood graph
-HL.sce <- buildNhoodGraph(HL.sce)
-
-
-
-# Plot single-cell UMAP
-umap_pl <- plotReducedDim(HL.sce, 
-                          dimred = "UMAP",
-                          colour_by="predicted.celltype.l1",
-                          text_by = "predicted.celltype.l1", 
-                          text_size = 3, 
-                          point_size = 0.5) +
-  guides(fill = "none")
-
-## Plot neighbourhood graph
-nh_graph_status <- plotNhoodGraphDA(HL.sce,
-                                    da_results_status, 
-                                    layout="UMAP",
-                                    alpha=0.1) 
-
-
-nh_graph_outcome <- plotNhoodGraphDA(HL.sce,
-                                     da_results_outcome, 
-                                     layout="UMAP",
-                                     alpha=0.1) 
-
-# print plots
-umap_pl + nh_graph_status + 
-  patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_Nhood_DA_graph_status.pdf"))
-dev.off()
-
-umap_pl + nh_graph_outcome + 
-  patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_Nhood_DA_graph_outcome.pdf"))
-dev.off()
-
-
-
-# for context show umap with disease status highlighted
-plotReducedDim(HL.sce, 
-               dimred = "UMAP",
-               colour_by="DiseaseStatus",
-               text_by = "DiseaseStatus", 
-               text_size = 3, 
-               point_size = 0.5) +
-  guides(fill = "none")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_DiseaseStatus.pdf"))
-dev.off()
-
-
-plotReducedDim(HL.sce, 
-               dimred = "UMAP",
-               colour_by="DiseaseOutcome",
-               text_by = "DiseaseOutcome", 
-               text_size = 3, 
-               point_size = 0.5) +
-  guides(fill = "none")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_DiseaseOutcome.pdf"))
-dev.off()
-
-
-
-
-# proceed with analysis for DiseaseStatus only, currently dataset seems insufficient for calling DiseaseOutcome 
-
-
-table(HL.seurat@meta.data$predicted.celltype.l3)
-
-#############################
-# annotate neighbourhoods 
-#############################
-
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status, coldata_col = "predicted.celltype.l1")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "predicted.celltype.l2")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "predicted.celltype.l3")
-da_results_status_anno <- annotateNhoods(HL.sce, da_results_status_anno, coldata_col = "seurat_clusters")
-
-head(da_results_status_anno)
-
-
-# Neighbourhoods tend to be homogeneous, we can define a threshold for celltype_fraction to exclude neighbourhoods that are a mix of cell types.
-
-# visualise at each level of annotation 
-anno.var <- c("predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3", "seurat_clusters")
-
-
-for(i in seq_along(anno.var)){
-  
-  plot.var <- paste0(anno.var[i], "_fraction")
-  name.var <- gsub("\\.", "_", anno.var[i])
-  print(ggplot(da_results_status_anno, aes(!!sym(plot.var))) + geom_histogram(bins=100))
-  
-  dev.copy(pdf, paste0(output.dir, "DA_results_DiseaseOutcome_histogram_nhood_", name.var, "fraction.pdf"))
-  dev.off()
-}
-
-
-
-# use above histograms to define thresholds for annotating nhoods as mixed at each resolution of annotation 
-
-threshold <- 0.9
-
-
-da_results_status_anno$celltype.l1 <- ifelse(da_results_status_anno$predicted.celltype.l1_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l1)
-da_results_status_anno$celltype.l2 <- ifelse(da_results_status_anno$predicted.celltype.l2_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l2)
-da_results_status_anno$celltype.l3 <- ifelse(da_results_status_anno$predicted.celltype.l3_fraction < threshold, "Mixed", da_results_status_anno$predicted.celltype.l3)
-da_results_status_anno$seurat_clusters <- ifelse(da_results_status_anno$seurat_clusters_fraction < threshold, "Mixed", da_results_status_anno$seurat_clusters)
-
-
-
-length(da_results_status_anno$Nhood) # 2,833 nhoods
-table(da_results_status_anno$celltype.l1 == "Mixed") # 700 nhoods became mixed
-table(da_results_status_anno$celltype.l2 == "Mixed") # 1335 nhoods became mixed
-table(da_results_status_anno$celltype.l3 == "Mixed") # 1891 nhoods became mixed
-table(da_results_status_anno$seurat_clusters == "Mixed") # 1045 nhoods became mixed
-
-
-
-
-
-
-# visualise at each level of annotation 
-anno.var <- c("predicted.celltype.l1", "predicted.celltype.l2", "predicted.celltype.l3", "seurat_clusters")
-
-
-for(i in seq_along(anno.var)){
-  
-  plot.var <- paste0(anno.var[i], "_fraction")
-  name.var <- gsub("\\.", "_", anno.var[i])
-  
-  
-  # Create a ggplot with histogram and line
-  print(
-    ggplot(da_results_status_anno, aes(x = !!sym(plot.var))) +
-      geom_histogram(aes(fill = ifelse(!!sym(plot.var) > threshold, "Above", "Below")), bins = 100, color = "black") +
-      geom_vline(xintercept = threshold, color = "green", linetype = "dashed") +
-      scale_fill_manual(values = c("red", "blue"), name = "Category") +
-      theme_minimal()  # Add additional themes as needed
-  )
-  
-  dev.copy(pdf, paste0(output.dir, "DA_results_DiseaseOutcome_histogram_nhood_", name.var, "fraction_withthreshold.pdf"))
-  dev.off()
-}
-
-
-
-
-# distribution of DA nhoods across annotation 
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l1)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l2)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$celltype.l3)
-table(da_results_status_anno$SpatialFDR < 0.05, da_results_status_anno$seurat_clusters)
-
-
-
-# Now we can visualize the distribution of DA Fold Changes in different cell types
-
-# iterate over annotation levels 
-
-anno.var <- c("celltype.l1", "celltype.l2", "celltype.l3", "seurat_clusters")
-
-# factorise for plotting
-da_results_status_anno$seurat_clusters <- factor(da_results_status_anno$seurat_clusters, levels = c(levels(HL.seurat$seurat_clusters), "Mixed"))
-
-
-
-for(i in seq_along(anno.var)){
-  
-  name.var <- gsub("\\.", "_", anno.var[i])
-  
-  print(
-    plotDAbeeswarm(da_results_status_anno, 
-                   group.by = anno.var[i])
-  )
-  dev.copy(pdf, paste0(output.dir, "Beeswarm_DA_DiseaseStatus_results_", name.var, ".pdf"))
-  dev.off()
-  
-}
-
-#####################################################################################
-# Group nhoods into larger groups for later deg identification
-#####################################################################################
-
-# once neighbourhoods are identified that are sig between conditions
-# we want to identify markers of these DA neighbourhoods
-
-#The function findNhoodGroupMarkers runs a one-VS-all differential gene expression test to identify marker genes for a group of neighbourhoods of interest. 
-# Before running this function you will need to define your neighbourhood groups depending on your biological question, that need to be stored as a NhoodGroup column in the da_results data.frame.
-
-# In many cases, such as this example, DA neighbourhoods are found in different areas of the KNN graph, and grouping together all significant DA populations might not be ideal, as they might include cells of very different celltypes. 
-# For this kind of scenario, we have implemented a neighbourhood function that uses community detection to partition neighbourhoods into groups on the basis of
-# (1) the number of shared cells between 2 neighbourhoods; (2) the direction of fold-change for DA neighbourhoods; (3) the difference in fold change.
-
-## Run buildNhoodGraph to store nhood adjacency matrix
-HL.sce <- buildNhoodGraph(HL.sce)
-
-# group DA neighbourhoods together using above metrics of shared cells, direction FC and difference FC. 
-
-
-# test different metrics to get nice grouping of nhoods 
-overlap.var <- 5
-max.fc.delta.var <- 10
-
-da_results_status_anno <- groupNhoods(HL.sce,
-                                      da_results_status_anno, 
-                                      da.fdr = 0.05,
-                                      overlap = overlap.var,
-                                      max.lfc.delta = max.fc.delta.var)
-
-
-head(da_results_status_anno) # found 513 DA neighbourhoods at FDR 5%
-length(unique(da_results_status_anno$NhoodGroup)) # number of groups
-
-
-
-
-# plot beeswarm
-plotDAbeeswarm(da_results_status_anno, group.by = "NhoodGroup") + 
-  ggtitle(paste0("overlap = ", overlap.var, " max LFC delta = ", max.fc.delta.var))
-
-dev.copy(pdf, paste0(output.dir, "Beeswarm_nhood_groups_DiseaseStatus.pdf"))
-dev.off()
-
-# unsure what is happening but looks like some nhood groups contain nhoods which are DA in different directions. this should not be occuring 
-
-
-# plot on nhood groups on umap projection 
-p1 <- plotNhoodGroups(HL.sce, da_results_status_anno, layout = "UMAP") + NoLegend()
-
-nh_graph_status + p1 + patchwork::plot_layout(guides = "collect")
-
-dev.copy(pdf, paste0(output.dir, "UMAP_nhood_groups_DiseaseStatus.pdf"))
-dev.off()
-
-
-# seurat clusters already offers a decent grouping of nhoods, perhaps use this or more refined clustering from seurat package to define nhood groups
-plotDAbeeswarm(da_results_status_anno, "seurat_clusters")
-
-
-# note, need at least 2 neighbourhoods assigned to each group for further processing 
-
-
-##################################################
-# finding gene signatures for neighbourhoods
-##################################################
-
-# restrict to only highly variable genes 
-
-## Exclude zero counts genes
-keep.rows <- rowSums(logcounts(HL.sce)) != 0
-HL.sce <- HL.sce[keep.rows, ]
-
-## Find HVGs
-set.seed(101)
-dec <- scran::modelGeneVar(HL.sce)
-hvgs <- scran::getTopHVGs(dec, n = 2000)
-head(hvgs)
-
-
-
-# We run findNhoodGroupMarkers to test for one-vs-all differential gene expression for each neighbourhood group
-
-# use seurat groups 
-#da_results_status_anno$NhoodGroup <- da_results_status_anno$seurat_clusters
-
-#da_results_status_anno <- da_results_status_anno %>%
-# filter(NhoodGroup != "Mixed")
-
-#da_results_status_anno$NhoodGroup <- droplevels(da_results_status_anno$NhoodGroup)
-
-set.seed(42)
-
-nhood_markers <- findNhoodGroupMarkers(HL.sce, 
-                                       da_results_status_anno, 
-                                       subset.row = hvgs, 
-                                       aggregate.samples = TRUE, 
-                                       sample_col = "SampleID")
-
-head(nhood_markers)
-table(da_results_status_anno$NhoodGroup, da_results_status_anno$celltype.l1)
-
-# inspect degs of nhood group1
-# which had many downregulated nhoods
-
-
-
-## ANALYSIS WRITTEN UP TO HERE 
-
-
-
-
-
-
-
-
-
-nhood_markers %>%
-  filter(adj.P.Val_13 < 0.05) %>%
-  arrange(desc(logFC_13)) %>%
-  select(c(GeneID, logFC_13, adj.P.Val_13))
-
-# visualise detexted markers 
-# select markers for group 1 at FDR 1% and logFC > 1
-table(nhood_markers$adj.P.Val_13 < 0.01) # 35 genes
-
-ggplot(nhood_markers, aes(logFC_13, -log10(adj.P.Val_13))) + 
-  geom_point(alpha=0.5, size=0.5) +
-  geom_hline(yintercept = 3)
-
-
-markers <- nhood_markers$GeneID[nhood_markers$adj.P.Val_13 < 0.01 & nhood_markers$logFC_13 > 0]
-
-
-set.seed(42)
-plotNhoodExpressionGroups(HL.sce, da_results_status_anno, features=intersect(rownames(HL.sce), markers[1:10]),
-                          #subset.nhoods = da_results$NhoodGroup %in% c(1, 2, 3), 
-                          scale = TRUE,
-                          grid.space = "fixed")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#DGE testing within a group
-
-# In some cases you might want to test for differential expression between cells in different conditions within the same neighbourhood group. You can do that using testDiffExp:
-
-#dge_6 <- testDiffExp(embryo_milo, da_results, design = ~ stage, meta.data = data.frame(colData(embryo_milo)),
-#                    subset.row = rownames(embryo_milo)[1:5], subset.nhoods=da_results$NhoodGroup=="6")
-
-#dge_6
-
-
-```
-
-
-### Plot frequency stats
-```{r freq_stats}
-
-stat.vals <- scCustomize::Cluster_Stats_All_Samples(Nils.seurat$CD45Pos, group_by_var = "Treatment")
-
-stat.vals
-
-
-
-```
 
 
 
@@ -3186,92 +1618,178 @@ VlnPlot_scCustom(Nils.seurat$CD45Pos,
 
 
 
+### Temp
+# read bam files and inspect bam alignment to OVAL
+```{r}
+
+
+# 
+#  setwd("/Users/ieo/Documents/Sequence_alignment/scRNAseq/Nils_10x_B16_ex_vivo_2024/SI-TT-E4_plus_OVAL_forward/outs")
+#  
+#  sequence.data <- Seurat::Read10X(data.dir = paste0("./raw_feature_bc_matrix"))
+#  sequence.data
+#  logic.var <- grepl("OVAL", rownames(sequence.data))
+#  rownames(sequence.data)[logic.var]
+#  x <- sequence.data[logic.var, ]
+#  sum(x)
+#  
+# # 
+#  
+#  
+#  seurat.temp <- CreateSeuratObject(counts = sequence.data,
+#                                    min.cells = 0,
+#                                    min.features = 0,
+#                                    project = "test")
+#      
+# 
+#grep("OVAL", rownames(seurat.temp), value = T)
+
+#logic.var <- grepl("OVAL", rownames(seurat.temp))
+#rownames(seurat.temp)[logic.var]
+
+# seurat.temp@assays$RNA@layers$counts[logic.var, ]
+
+
+#VlnPlot_scCustom(seurat.temp, "OVAL")
 
 
 
 
-
-### CELL CYCLE
-```{r remedy001}
-
-
-# cell cycle scoring 
-s.genes <- cc.genes$s.genes
-g2m.genes <- cc.genes$g2m.genes
-
-
-HL.seurat <- CellCycleScoring(HL.seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
-
-head(HL.seurat@meta.data)
-scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "S.Score", reduction = "umap.cca.sct")
-scCustomize::FeaturePlot_scCustom(HL.seurat, feature = "G2M.Score", reduction = "umap.cca.sct")
-
-
+# library(Rsamtools)
+# 
+# # Path to BAM file
+# bam_file <- "possorted_genome_bam.bam"
+# 
+# # Load BAM file and index
+# bam <- Rsamtools::BamFile(bam_file)
+# 
+# seqinfo(bam)
+# 
+# 
+# which <- GRanges(c(
+#     "OVAL:1-1875"
+# ))
+# ## equivalent:
+# ## GRanges(
+# ##     seqnames = c("seq1", "seq2", "seq2"),
+# ##     ranges = IRanges(
+# ##         start = c(1000, 100, 1000),
+# ##         end = c(2000, 1000, 2000)
+# ##     )
+# ## )
+# what <- c("qname", "rname", "strand", "pos", "qwidth", "mapq", "qual", "cigar", "flag", "seq")
+# param <- ScanBamParam(which=which, what=what)
+# 
+# aln <- scanBam(bam, param=param)
+# aln
+# count.vals <- countBam(bam, param=param)
+# count.vals
+# 
+# unique(aln$`OVAL:1-1875`$flag)
+# 
+# table(aln$`OVAL:1-1875`$pos)
+# 
+# #quickBamFlagSummary(bam)
+# 
+# 
+# 
+# 
+# 
+# 
+# #install.packages("rhdf5")
+# library(rhdf5)
+# 
+# 
+# # Specify the path to your HDF5 file
+# hdf5_file <- "molecule_info.h5"
+# 
+# # Open the HDF5 file
+# hdf5_data <- H5Fopen(hdf5_file)
+# 
+# # Read a dataset from the HDF5 file
+# dataset_name <- "features"
+# dataset <- h5read(hdf5_data, dataset_name)
+# 
+# dataset$name[dataset$name == "OVAL"]
+# 
+# # Close the HDF5 file when done
+# H5Fclose(hdf5_data)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# # Specify the path to your HDF5 file
+# hdf5_file <- "raw_feature_bc_matrix.h5"
+# 
+# # Open the HDF5 file
+# hdf5_data <- H5Fopen(hdf5_file)
+# 
+# # Read a dataset from the HDF5 file
+# dataset_name <- "matrix"
+# dataset <- h5read(hdf5_data, dataset_name)
+# dataset
+# dataset$data[dataset$features$name == "OVAL"]
+# 
+# 
+# # Close the HDF5 file when done
+# H5Fclose(hdf5_data)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# #aln <- scanBam(bam)
+# 
+# length(aln)
+# class(aln)
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# Rsamtools::getSeq(bam)
+# 
+# 
+# # Extract alignments overlapping the gene
+# gene_alignments <- subset(bam, which(  # Use 'subset' to filter alignments
+#   seqnames(bam) == "chromosome_name" &  # Replace with chromosome name
+#   (start(bam) >= gene_coordinates[1] & end(bam) <= gene_coordinates[2])  # Filter by gene coordinates
+# ))
 
 
 ```
 
 
-### below not written for this dataset
+### Doublet detection and removal \\ currently not done as packages are broken or not updated for seuratV5 assay
+```{r doublet_detection_and_removal}
 
 
-### Playground 
-```{r remedy001}
+# would like to use DoubletFinder as I think this is a more elegant package for doublet detection 
+# however, seems DoubletFinder has not been updated to work with SeuratV5 and may have additional bugs preventing use by simply converting object to V3
 
+# scDblFinder also has issues - error = "as_cholmod_sparse" not provided by package "Matrix" 
+# seems to be an issue with Matrix and irlba packages. 
+# tried work arounds suggested on github pages, which essentially remove these packages and reinstall 
+# however error persists. 
 
-# interrogate specific lineage genes 
-
-# aggregate expression for heatmap visualisation
-
-pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-
-
-# cytokine expression 
-
-goi <- grep("^IL.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^IF.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^CX.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi <- grep("^GZ.*", rownames(Nils.seurat$CD45Pos), value = T)
-goi
-
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE)
-
-goi <- grep("^Serpinb.*", rownames(Nils.seurat$CD45Neg), value = T)
-goi
-
-
-
-
-
-# SERPINB14
-
-
-
-
-
-
-
-
-
-rownames(Nils.seurat$CD45Neg)
-rownames(Nils.seurat$CD45Pos)
-# why is cd45pos dataset have caps genes and cd45neg has mouse gene annotation? 
-
-
+# therefore for now, dont identify doublets  
 
 
 
 ```
-
-
 
 
 

@@ -1,0 +1,849 @@
+---
+title: "CD45Neg_dataset_analysis"
+author: "Dillon Corvino"
+date: "25/01/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+Built with R version `r getRversion()`
+
+## Setup {.tabset}
+
+### Dataset information
+```{r Dataset_Info}
+
+# Data 
+# B16 - OVA 
+
+# PDS = I.T - bind Gquadraplex
+# day 4 post-treatment 
+
+
+# Research questions 
+# How does PDS induces an anti-tumor immune response?
+# Known that after PDS treatment, certain DAMPs are induced, intratumoral chemokine levels go up drastically and subsequntly immune cells are recruited into the tumor.
+# Main research questions are:
+#1. Which cell subsets are producing the chemokines
+#2. Are there differences between macrophages and DCs between PDS and Vehicle (because there are DAMPs that should activate them)
+#3. How does the treatment effect the tumor cells (is it possible to discriminate them from other tissue cells, if not they express ovalbumin...this should make it at least possible to identify them.)
+
+
+
+
+# key genes
+# IL1b, IL6, IL12, IFNG, TNFA, 
+
+# CCL2,3,4,5 
+# CXCL1, CXCL9,10,13 
+
+
+
+
+
+```
+
+
+### Environment
+```{r setup}
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,  
+  eval = TRUE, 
+  tidy = TRUE
+)
+
+knitr::opts_knit$set(
+  root.dir = "../"
+)
+
+
+# Environment Set up
+rm(list = ls()) #Clean workspace
+cat("\014")     #Clean Console
+gc() # Free memory
+
+# pipeline variables
+long.compute <- TRUE
+do.plot <- TRUE
+quick.load <- TRUE
+
+# Establish working directory
+library("rstudioapi")
+
+# Set working directory to source file location
+setwd(dirname(getActiveDocumentContext()$path))
+setwd("..")
+
+# Create output directories & load custom functions & colour scheme
+source("scripts/Setup.R", local = knitr::knit_global())
+
+# Nebulosa / scCustomize has issues with ggplot2 v3.5.0, therefore ensure v3.4.4 is installed
+#devtools::install_version("ggplot2", version = '3.4.4')
+
+library("Seurat")
+library("SeuratObject")
+library("SeuratData")
+library("SeuratWrappers")
+library("dplyr")
+library("scCustomize")
+library("tibble")
+library("ggplot2")
+
+########################################
+# Parallelization of seurat functions
+########################################
+
+parallelization <- TRUE
+
+
+if(parallelization){
+  library(future)
+  # check the current active plan
+  plan()
+  
+  # detect cores
+  ncores <- parallel::detectCores()
+  ncores <- ncores-5
+  # set plan
+  plan("multisession", workers = ncores)
+  plan()
+  
+  # set max limit for global variables
+  # note this will drastically increase RAM usage, be aware of machine limits
+  # set value is in bites therefore 1000*1024^2 = 1GB Therefore set to 10GBs 
+  options(future.globals.maxSize = 10000 * 1024^2, 
+          future.rng.onMisuse="ignore") 
+}
+
+
+
+if(quick.load){
+  
+  CD45neg.seurat <- LoadSeuratRds("saves/Nils_seurat_CD45Neg.rds")
+  
+  # set levels for easier downstream plotting 
+  CD45neg.seurat@meta.data$Treatment <- factor(CD45neg.seurat@meta.data$Treatment, levels = c("Vehicle", "PDS"))
+  
+}
+```
+
+
+
+## Overview of dataset {.tabset}
+
+### Broad overview of dataset
+```{r broad_overview}
+
+if(do.plot){
+  
+  
+  # create output dir
+  output.dir <- paste0("results/CD45Neg_Overview/")
+  
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
+    
+  }
+  
+  
+  
+  # set assay
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  
+  vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters")
+  
+  
+  for(j in seq_along(vars.to.plot)){
+    name.var <- gsub("\\.", "_", vars.to.plot[j])
+    
+    print(
+      scCustomize::DimPlot_scCustom(CD45neg.seurat,
+                                    reduction = "umap", 
+                                    label = TRUE,
+                                    figure_plot = TRUE,
+                                    group.by = vars.to.plot[j]) 
+    )
+    
+    
+    dev.copy(pdf, paste0(output.dir, "CD45Neg_UMAP_", name.var, ".pdf"))
+    dev.off()
+    
+  }
+  
+  
+  # split umap plots
+  print(
+    scCustomize::DimPlot_scCustom(CD45neg.seurat,
+                                  reduction = "umap", 
+                                  label = TRUE,
+                                  figure_plot = TRUE,
+                                  group.by = "seurat_clusters", 
+                                  split.by = "Treatment") 
+  )
+  
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Neg_UMAP_seurat_clusters_split_by_treatment.pdf"))
+  dev.off()
+  
+}
+
+
+```
+
+### Cluster stats
+```{r cluster_stats}
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_Overview/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+#############################################
+# Number of cells per cluster
+#############################################
+
+cluster.n <- table(CD45neg.seurat@meta.data$seurat_clusters)
+
+cluster.n <- as.data.frame(cluster.n)
+cluster.n$Var1 <- factor(cluster.n$Var1, levels = cluster.n$Var1)
+
+
+ggplot(cluster.n) +
+  aes(x = Var1, y = Freq, fill = Var1) +
+  geom_col() +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1) +
+  labs(x = "Cluster ID", y = "Number of cells", title = "Number of cells per cluster") +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+ggsave(paste0(output.dir, "Barplot_number_of_cells_per_cluster.pdf"))
+
+
+#############################################
+# Freq of clusters across treatment 
+#############################################
+
+dist.table <- table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Treatment", y = "% of treatment", title = "Frequency of clusters per treatment") +
+  scale_fill_manual(values = c(Vehicle = "grey", PDS = "darkred")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_clusters_per_treatment.pdf"))
+
+
+```
+
+### Cell Cycle scoring
+```{r cell_cycle}
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_cell_cycle/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+################################
+# Get cell cycle genes 
+################################
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+# pseudo-map to mouse gene (captures most except Mlf1ip, Fam64a and Hn1)
+s.genes <- stringr::str_to_title(s.genes)
+g2m.genes <- stringr::str_to_title(g2m.genes)
+
+#####################
+# score cell cycle
+#####################
+
+CD45neg.seurat <- CellCycleScoring(CD45neg.seurat,
+                                   s.features = s.genes,
+                                   g2m.features = g2m.genes,
+                                   set.ident = TRUE)
+
+
+#####################
+# Visualise score
+#####################
+
+head(CD45neg.seurat@meta.data)
+
+# Feature plots 
+
+# S-score 
+scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
+                                  feature = "S.Score", 
+                                  reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_S_score.pdf"))
+dev.off()
+  
+# G2M-score 
+scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
+                                  feature = "G2M.Score", 
+                                  reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_G2M_score.pdf"))
+dev.off()
+
+# Dim plot split by phase
+scCustomize::DimPlot_scCustom(CD45neg.seurat, 
+                              group.by = "seurat_clusters",
+                              split.by = "Phase",
+                              label = TRUE,
+                              reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_CD45Neg_cluster_by_phase.pdf"))
+dev.off()
+
+
+# Stacked VlnPlot
+scCustomize::Stacked_VlnPlot(CD45neg.seurat,
+                             features = c("S.Score", "G2M.Score"), 
+                             group.by = "seurat_clusters")
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_cell_cycle.pdf"))
+dev.off()
+
+
+
+
+###################
+# Quantification 
+###################
+
+
+# Frequency of phase per cluster
+dist.table <- table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$Phase)
+
+cluster.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, cluster.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of cluster", title = "Frequency of phase per cluster") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_cluster.pdf"))
+
+
+# Frequency of phase per treatment
+
+dist.table <- table(CD45neg.seurat@meta.data$Treatment, CD45neg.seurat@meta.data$Phase)
+
+treatment.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of treatment", title = "Frequency of phase per treatment") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_treatment.pdf"))
+
+
+
+
+
+
+```
+
+
+## DEG analysis {.tabset}
+
+### Cluster-wise DEGs - calculate
+```{r Clusterwise_DEGs_calculation}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_cluster_wise_DEGs/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+if(long.compute){
+  
+  
+  CD45neg.seurat <- PrepSCTFindMarkers(CD45neg.seurat)
+  
+  # set assay
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  
+  # set idents
+  Idents(CD45neg.seurat) <- "seurat_clusters"
+  
+  CD45Neg.de <- FindAllMarkers(CD45neg.seurat,
+                               assay = "SCT",
+                               only.pos = TRUE, 
+                               verbose = TRUE)
+  
+  
+  # save to file 
+  write.csv(CD45Neg.de, paste0(output.dir, "CD45Neg_DEGs.csv"))
+  
+  
+  
+}else{
+  
+  # load DEG table
+  CD45Neg.de <- read.csv(paste0(output.dir, "CD45Neg_DEGs.csv"))
+  
+}
+
+
+
+```
+
+### Cluster-wise DEGs - heatmaps
+```{r clusterwise_DEGs_heatmaps}
+
+
+if(do.plot){
+  # aggregate expression for heatmap visualisation
+  
+  pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                        assays = "SCT",
+                                        return.seurat = TRUE, 
+                                        group.by = c("seurat_clusters"))
+  
+  
+  
+  goi <- CD45Neg.de %>%
+    filter(p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    top_n(10, avg_log2FC) %>%
+    pull(gene)
+  
+  
+  DoHeatmap(pseudo.cd45neg, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_top_10_DEGs_pseudobulk.pdf"))
+  dev.off()
+  
+  
+  
+  
+  # iterate over the top degs for each cluster 
+  cluster.id <- unique(CD45Neg.de$cluster)
+  for(i in seq_along(cluster.id)){
+    
+    
+    print(cluster.id[i])
+    
+    goi <- CD45Neg.de %>%
+      filter(p_val_adj < 0.05) %>%
+      filter(cluster == cluster.id[i]) %>%
+      top_n(50, avg_log2FC)
+    
+    goi <- unique(goi)
+    
+    print(
+      DoHeatmap(pseudo.cd45neg, 
+                features = goi$gene, 
+                draw.lines = FALSE, 
+                raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
+    dev.off()
+    
+  }
+  
+}
+
+```
+
+## Melanocyte gene visualisation {.tabset}
+
+### Melanocyte-specific gene expression
+```{r melanocyte_genes}
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_Melanocyte_genes/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# list melanocyte genes 
+goi <- c("Mitf", "Tyr", "Pmel", "Mlana", "Tyrp1", "Sox10")
+
+
+# Plot Feature and Density plots iteratively over goi 
+for(i in seq_along(goi)){
+  
+  # feature plots
+  print(
+    scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
+                                      reduction = "umap", 
+                                      features = goi[i])
+    
+  )
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_", goi[i], ".pdf"))
+  dev.off()
+  
+  
+  # density plots
+  
+  print(
+    scCustomize::Plot_Density_Custom(CD45neg.seurat, 
+                                     reduction = "umap",
+                                     features = goi[i], 
+                                     custom_palette = batlow.pal)
+  )
+  dev.copy(pdf, paste0(output.dir, "UMAP_DensityPlot_CD45Neg_", goi[i], ".pdf"))
+  dev.off()
+  
+  
+  
+}
+
+
+##############################
+# Stacked vln plot
+##############################
+
+scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
+                             features = goi,
+                             group.by = "seurat_clusters",
+                             pt.size = 0)
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_melanocyte_genes.pdf"))
+dev.off()
+
+
+###########
+# heatmap
+###########
+
+# aggregate expression for heatmap visualisation
+pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("seurat_clusters"))
+
+DoHeatmap(pseudo.cd45neg, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_melanocyte_genes.pdf"))
+dev.off()
+
+
+
+
+```
+
+## Cluster annotation {.tabset}
+
+## SingleR cluster annotation
+```{r SingleR_cluster_annotation}
+
+# Notes:
+# there is an error with collect() when trying to load celldex datasets
+# i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
+# but im running r 4.2.3 and this would require 4.3
+# not keen to upgrade right now 
+# so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
+# need to downgrade to this version 
+#devtools::install_version("dbplyr", version = "2.3.4")
+#devtools::install_version("dbplyr", version = "2.4")
+# in theory if biocmanager is up to date, could just run below and should fix the problem
+#library(BiocManager) # 3.16
+#install("BiocFileCache")
+# also:
+# need to ensure matrixStats is at version 1.1.0 
+#remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
+#BiocManager::install(version = "3.18")
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Neg_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  # load required packages
+  library("SingleR")
+  library("celldex")
+  
+  
+  ##################################
+  # Use MouseRNAseqData
+  ##################################
+  
+  ref.mouse <-  celldex::MouseRNAseqData()
+  
+  
+  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
+  
+  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
+  # further split into 28 subtypes under label.fine 
+  
+  
+  ######################
+  # Fine labels 
+  ######################
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.fine)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+  #SingleR::plotDeltaDistribution(SingleR.pred)
+  #SingleR::plotScoreDistribution(SingleR.pred)
+  
+  ######################
+  # Main labels 
+  ######################
+  
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.main)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+}
+
+```
+
+
+
+
+## RQ1: Which CD45Neg clusters express chemokines or cytokines {.tabset}
+
+### Chemokine and Cytokine expression visualisation 
+```{r chemokine_cytokine_expression}
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_chemokine_cytokines/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# aggregate expression for heatmap visualisation
+pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("seurat_clusters"))
+
+
+########################################
+# List gene sets of interest to plot
+########################################
+
+cxc.genes <- grep("^Cxc.*", rownames(pseudo.cd45neg), value = T)
+ccr.genes <- grep("^Ccr.*", rownames(pseudo.cd45neg), value = T)
+il.genes <- grep("^Il.*", rownames(pseudo.cd45neg), value = T)
+gzm.genes <- grep("^Gzm.*", rownames(pseudo.cd45neg), value = T)
+ifn.genes <- grep("^Ifn.*", rownames(pseudo.cd45neg), value = T)
+custom.genes <- c("Il1b", "Il6", "Il12a", "Ifng", "Tnf", "Ccl2", "Ccl3", "Ccl4", "Ccl5", "Cxcl1", "Cxcl9", "Cxcl10", "Cxcl13") # Il12b not present in CD45Neg dataset
+
+goi <- list(Cxcr_genes = cxc.genes, 
+            Ccr_genes = ccr.genes,
+            Interleukin_genes = il.genes,
+            Gzm_genes = gzm.genes,
+            Ifn_genes = ifn.genes,
+            Custom_genes = custom.genes)
+
+
+###################
+# Plot heatmaps
+###################
+
+for(i in seq_along(names(goi))){
+  
+  print(
+    DoHeatmap(pseudo.cd45neg, 
+              features = goi[[i]], 
+              draw.lines = FALSE, 
+              angle = 90,
+              raster = FALSE) + 
+      scico::scale_fill_scico(palette = "batlow", 
+                              direction = 1, 
+                              na.value = "white")
+  )
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_", names(goi)[i], ".pdf"))
+  dev.off()
+  
+}
+
+
+##############################
+# Stacked vln plot
+##############################
+
+for(i in seq_along(names(goi))){
+  
+  if(length(goi[[i]]) <= 15){
+    
+    
+    print(
+      scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
+                                   features = goi[[i]],
+                                   group.by = "seurat_clusters",
+                                   pt.size = 0)
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_", names(goi)[i], ".pdf"))
+    dev.off()
+    
+  }else{
+    
+    temp.goi <- goi[[i]]
+    
+    # Split the vector into multiple vectors
+    split_indices <- seq(1, length(temp.goi), by = 15)
+    split_list <- lapply(split_indices, function(i) temp.goi[i:min(i + 14, length(temp.goi))])
+    
+    
+    for(j in seq_along(length(split_list))){
+      
+      print(
+        scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
+                                     features = split_list[[j]],
+                                     group.by = "seurat_clusters",
+                                     pt.size = 0)
+      )
+      
+      dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_", names(goi)[i], "_", j, ".pdf"))
+      dev.off()
+      
+    }
+    
+  }
+  
+}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
