@@ -18,6 +18,9 @@
 #ignore output 
 results/**/**
 
+# ignore input data 
+data/**/**
+
 # Output files from R CMD check
 /*.Rcheck/
 
