@@ -91,6 +91,7 @@ source("scripts/Setup.R", local = knitr::knit_global())
 
 # Nebulosa / scCustomize has issues with ggplot2 v3.5.0, therefore ensure v3.4.4 is installed
 #devtools::install_version("ggplot2", version = '3.4.4')
+# but note for clusttree, require updated ggplot2 >= 3.5
 
 library("Seurat")
 library("SeuratObject")
@@ -139,6 +140,464 @@ if(quick.load){
 }
 ```
 
+
+## Clean dataset {.tabset}
+
+## Identifying Immune cell contamination - SingleR cluster annotation
+```{r SingleR_cluster_annotation}
+
+# Notes:
+# there is an error with collect() when trying to load celldex datasets
+# i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
+# but im running r 4.2.3 and this would require 4.3
+# not keen to upgrade right now 
+# so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
+# need to downgrade to this version 
+#devtools::install_version("dbplyr", version = "2.3.4")
+#devtools::install_version("dbplyr", version = "2.4")
+# in theory if biocmanager is up to date, could just run below and should fix the problem
+#library(BiocManager) # 3.16
+#install("BiocFileCache")
+# also:
+# need to ensure matrixStats is at version 1.1.0 
+#remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
+#BiocManager::install(version = "3.18")
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Neg_Immune_cell_contamination/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  # load required packages
+  library("SingleR")
+  library("celldex")
+  
+  
+  ##################################
+  # Use MouseRNAseqData
+  ##################################
+  
+  ref.mouse <-  celldex::MouseRNAseqData()
+  
+  
+  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
+  
+  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
+  # further split into 28 subtypes under label.fine 
+  
+  
+  ######################
+  # Fine labels 
+  ######################
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.fine)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+  #SingleR::plotDeltaDistribution(SingleR.pred)
+  #SingleR::plotScoreDistribution(SingleR.pred)
+  
+  ######################
+  # Main labels 
+  ######################
+  
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.main)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+}
+
+```
+
+
+### Confirming Immune cell contamination - CD45 and granulocyte linage marker gene visualisation
+```{r CD45_and_granulocyte_lineage_gene_visualisation}
+
+if(long.compute){
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_Immune_cell_contamination/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# list melanocyte genes 
+goi <- c("Ptprc", "Cd14")
+
+# Plot Feature and Density plots iteratively over goi 
+for(i in seq_along(goi)){
+  
+  # feature plots
+  print(
+    scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
+                                      reduction = "umap", 
+                                      features = goi[i])
+    
+  )
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_", goi[i], ".pdf"))
+  dev.off()
+  
+  
+  # density plots
+  
+  print(
+    scCustomize::Plot_Density_Custom(CD45neg.seurat, 
+                                     reduction = "umap",
+                                     features = goi[i], 
+                                     custom_palette = batlow.pal)
+  )
+  dev.copy(pdf, paste0(output.dir, "UMAP_DensityPlot_CD45Neg_", goi[i], ".pdf"))
+  dev.off()
+  
+  
+  
+}
+
+
+##############################
+# Stacked vln plot
+##############################
+
+scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
+                             features = goi,
+                             group.by = "seurat_clusters",
+                             pt.size = 0)
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_granulocyte_markers.pdf"))
+dev.off()
+
+
+###########
+# heatmap
+###########
+
+# aggregate expression for heatmap visualisation
+pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("seurat_clusters"))
+
+DoHeatmap(pseudo.cd45neg, 
+          features = goi, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_granulocyte_markers.pdf"))
+dev.off()
+
+}
+
+
+```
+
+
+### Remove contamination immune clusters
+```{r remove_immune_contamination}
+
+if(long.compute){
+  
+    # cluster 5 looks to be immune contaimination 
+  
+  # set immune cell cluster variable
+  Immune.cell.cluster <- 5
+  
+  
+  head(CD45neg.seurat@meta.data)
+  
+  
+  # set assay
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  # set idents
+  Idents(CD45neg.seurat) <- "seurat_clusters"
+  
+  # immune cell contamination cluster is relatively small, sharp drop of in cluster sizes at cluster 4
+  table(CD45neg.seurat@meta.data$seurat_clusters) # cluster 5 = 617 cells
+  
+  # remove this cluster from dataset 
+  Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$seurat_clusters
+  CD45neg.seurat <- subset(CD45neg.seurat, idents = Immune.cell.cluster, invert = TRUE)
+  unique(Idents(CD45neg.seurat))
+  
+  
+  # drop levels in seurat cluster meta
+  CD45neg.seurat$seurat_clusters <- droplevels(CD45neg.seurat$seurat_clusters)
+  
+}
+
+```
+
+
+## Renormalise / integrate / dim reduction | after removing contamination immune cells {.tabset}
+
+## re-calculate normalisation and integration for CD45Neg dataset
+```{r re_normalise_and_integrate_CD45Neg_dataset}
+
+if(long.compute){
+  
+  
+  # split object up based on sequencing run / in seurat V5 these are splitting the layers
+  CD45neg.seurat[["RNA"]] <- split(CD45neg.seurat[["RNA"]],  f = CD45neg.seurat$SampleID)
+  
+  DefaultAssay(CD45neg.seurat) <- "RNA"
+  
+  
+  
+  
+  #####################################################
+  # Normalise with scTransform and integrate data
+  #####################################################
+  # note error with more recent version of matrixStats resulting in "useNames = NA is defunct" error. downgrade to matrixStats version 1.1.0 as a workaround
+  # https://github.com/satijalab/seurat/issues/7501#issuecomment-1854571904
+  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts  
+  
+  
+  
+  # note RNA assay is split into run level layers, below script will apply normalisation etc layer-wise
+  
+  CD45neg.seurat <- CD45neg.seurat %>%
+    SCTransform(method = "glmGamPoi", 
+                vars.to.regress = "percent_mito", 
+                vst.flavor = "v2",
+                verbose = TRUE) %>%
+    RunPCA(reduction.name = "pca_sct") %>%
+    RunUMAP(reduction = "pca_sct", 
+            dims = 1:30, 
+            reduction.name = "umap.unintegrated.sct")
+  
+  
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  
+  # integrate layers using cca integration and calculate dim redu and cluster identification
+  
+  # cluster resolution value based on previous estimation 
+  clust.res <- 0.4
+  
+  
+  CD45neg.seurat <- CD45neg.seurat %>%
+    IntegrateLayers(orig.reduction = "pca_sct",
+                    new.reduction = "integrated.cca.sct",
+                    method = CCAIntegration,
+                    normalization.method = "SCT",
+                    verbose = F) %>%
+    FindNeighbors(dims = 1:30,
+                  reduction = "integrated.cca.sct") %>%
+    FindClusters(resolution = clust.res, 
+                 cluster.name = "clusters_cca_sct") %>%
+    RunUMAP(reduction = "integrated.cca.sct",
+            dims = 1:30, 
+            reduction.name = "umap")
+  
+  
+}
+
+
+
+```
+
+
+## plot integration after removing contamination immune cells from CD45Neg dataset 
+
+```{r plot_integration_after_removing_contamination}
+
+if(long.compute){
+  
+  if(do.plot){
+    
+    # create output dir
+    output.dir <- paste0("results/CD45Neg_Integration_validation_after_cleaning/")
+    
+    if(!dir.exists(output.dir)){
+      dir.create(output.dir, 
+                 recursive = T)
+      
+    }
+    
+    # set variables
+    unintegrated.reduction <- "umap.unintegrated.sct"
+    integrated.reduction <- "umap"
+    title.var <- "SCT"
+    
+    
+    
+    # evaluate integration and dim reduction
+    
+    # set default assay
+    DefaultAssay(CD45neg.seurat) <- "SCT"
+    
+  
+    
+    vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
+    
+    
+    for(i in seq_along(vars.plot)){
+      
+      
+      # remove "." from name
+      name.var <- gsub("\\.", "_", vars.plot[i])
+      
+      before.int <- DimPlot(CD45neg.seurat,
+                            reduction = unintegrated.reduction, 
+                            label = T,
+                            group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("Unintegrated ", title.var, " Normalisation"))
+      
+      after.int <- DimPlot(CD45neg.seurat,
+                           reduction = integrated.reduction, 
+                           label = T,
+                           group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("CCA Integration using ", title.var, " Normalisation"))
+      
+      print(before.int | after.int)
+      dev.copy(pdf, paste0(output.dir, "UMAP_before_after_integration_", name.var, "_CD45Neg_dataset.pdf"))
+      dev.off()
+      
+      
+      
+    }
+  }
+  
+  
+}
+
+
+```
+
+
+### Save final cleaned seurat objects
+```{r save_seurat_object_final}
+
+if(long.compute){
+  
+  library("SeuratDisk")
+
+  SaveSeuratRds(CD45neg.seurat, 
+                file = "saves/Nils_seurat_CD45Neg.rds")
+  
+}
+
+```
+
+
+## Cluster annotation {.tabset}
+
+## SingleR cluster annotation
+```{r SingleR_cluster_annotation}
+
+# Notes:
+# there is an error with collect() when trying to load celldex datasets
+# i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
+# but im running r 4.2.3 and this would require 4.3
+# not keen to upgrade right now 
+# so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
+# need to downgrade to this version 
+#devtools::install_version("dbplyr", version = "2.3.4")
+#devtools::install_version("dbplyr", version = "2.4")
+# in theory if biocmanager is up to date, could just run below and should fix the problem
+#library(BiocManager) # 3.16
+#install("BiocFileCache")
+# also:
+# need to ensure matrixStats is at version 1.1.0 
+#remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
+#BiocManager::install(version = "3.18")
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Neg_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  # load required packages
+  library("SingleR")
+  library("celldex")
+  
+  
+  ##################################
+  # Use MouseRNAseqData
+  ##################################
+  
+  ref.mouse <-  celldex::MouseRNAseqData()
+  
+  
+  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
+  
+  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
+  # further split into 28 subtypes under label.fine 
+  
+  
+  ######################
+  # Fine labels 
+  ######################
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.fine)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+  #SingleR::plotDeltaDistribution(SingleR.pred)
+  #SingleR::plotScoreDistribution(SingleR.pred)
+  
+  ######################
+  # Main labels 
+  ######################
+  
+  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                          ref = ref.mouse, 
+                          method = "cluster",
+                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                          labels = ref.mouse$label.main)
+  
+  # Plot 
+  p1 <- plotScoreHeatmap(SingleR.pred, 
+                         show_colnames = TRUE)
+  p1
+  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"), plot = p1)
+  
+}
+
+```
 
 
 ## Overview of dataset {.tabset}
@@ -627,101 +1086,7 @@ dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_melanocyte_genes.pdf"))
 dev.off()
 
 
-
-
 ```
-
-## Cluster annotation {.tabset}
-
-## SingleR cluster annotation
-```{r SingleR_cluster_annotation}
-
-# Notes:
-# there is an error with collect() when trying to load celldex datasets
-# i think its an error with biocmanager and has been fixed with a very recent update. > 3.16 
-# but im running r 4.2.3 and this would require 4.3
-# not keen to upgrade right now 
-# so will try a work around of downgrading dbplyr to version 2.3.4 from 2.4 which im currently running 
-# need to downgrade to this version 
-#devtools::install_version("dbplyr", version = "2.3.4")
-#devtools::install_version("dbplyr", version = "2.4")
-# in theory if biocmanager is up to date, could just run below and should fix the problem
-#library(BiocManager) # 3.16
-#install("BiocFileCache")
-# also:
-# need to ensure matrixStats is at version 1.1.0 
-#remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts
-#BiocManager::install(version = "3.18")
-
-if(long.compute){
-  
-  output.dir <- "results/CD45Neg_SingleR/"
-  
-  # Create output directory
-  if(!dir.exists(paste0(output.dir))){
-    dir.create(paste0(output.dir), 
-               recursive = T)
-  }
-  
-  
-  # load required packages
-  library("SingleR")
-  library("celldex")
-  
-  
-  ##################################
-  # Use MouseRNAseqData
-  ##################################
-  
-  ref.mouse <-  celldex::MouseRNAseqData()
-  
-  
-  # Benayoun Lab that identified, downloaded and processed data sets on GEO that corresponded to sorted cell types (Benayoun et al., 2019).
-  
-  # The dataset contains 358 mouse RNA-seq samples annotated to 18 main cell types
-  # further split into 28 subtypes under label.fine 
-  
-  
-  ######################
-  # Fine labels 
-  ######################
-  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.fine)
-  
-  # Plot 
-  p1 <- plotScoreHeatmap(SingleR.pred, 
-                         show_colnames = TRUE)
-  p1
-  
-  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_fine_labels_MouseRNAseqData_db.pdf"), plot = p1)
-  
-  #SingleR::plotDeltaDistribution(SingleR.pred)
-  #SingleR::plotScoreDistribution(SingleR.pred)
-  
-  ######################
-  # Main labels 
-  ######################
-  
-  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.main)
-  
-  # Plot 
-  p1 <- plotScoreHeatmap(SingleR.pred, 
-                         show_colnames = TRUE)
-  p1
-  ggsave(paste0(output.dir, "Heatmap_cluster_annotations_main_labels_MouseRNAseqData_db.pdf"), plot = p1)
-  
-}
-
-```
-
-
 
 
 ## RQ1: Which CD45Neg clusters express chemokines or cytokines {.tabset}
@@ -837,10 +1202,170 @@ for(i in seq_along(names(goi))){
 
 ```
 
+## RQ2: DEGs within clusters across treatment {.tabset}
+
+### Treatment-wise DEGs - calculate
+```{r Treatmentwise_DEGs_calculation}
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_treatment_wise_DEGs/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+if(long.compute){
+  
+  
+  CD45neg.seurat <- PrepSCTFindMarkers(CD45neg.seurat)
+  
+  # set assay
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  
+  
+  # add annotation for treatment 
+  CD45neg.seurat@meta.data$Treatment_cluster <- paste0(CD45neg.seurat@meta.data$Treatment, "_", CD45neg.seurat@meta.data$seurat_clusters)
+  
+  # set Idents
+  Idents(CD45neg.seurat) <- "Treatment_cluster"
+  
+  
+  cluster.ids <- unique(CD45neg.seurat@meta.data$seurat_clusters)
+  
+  # create list to store output
+  DEG.list <- list()
+  
+  # run through DEG specifically between vehicle and treatment for each cluster 
+  
+  for(i in seq_along(cluster.ids)){
+    temp.de <- FindMarkers(CD45neg.seurat,
+                           assay = "SCT",
+                           ident.1 = paste0("PDS_", cluster.ids[i]),
+                           ident.2 = paste0("Vehicle_", cluster.ids[i]),
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    DEG.list[[i]] <- temp.de
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_PDS_", cluster.ids[i], "_vs_Vehicle_", cluster.ids[i], ".csv"))
+    
+    
+  }
+  # add names to DEG.list
+  names(DEG.list) <- cluster.ids
+  
+  # save DEG list to file 
+  saveRDS(DEG.list, paste0(output.dir, "DEG_list_object.rds"))
+  
+  
+}else{
+  
+  DEG.list <- readRDS(paste0(output.dir, "DEG_list_object.rds"))
+  
+}
+
+
+```
+
+### Treatment-wise DEGs - Volcano
+```{r treatmentwise_DEGs_volcano}
+
+# visualise treatment-wise DEGs as volcano plots
+
+
+if(do.plot){
+  
+  for(i in 1:length(DEG.list)){
+    
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- DEG.list[[i]] %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0(names(DEG.list)[i], " PDS vs Vehicle"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_PDS_vs_Vehicle_cluster_", names(DEG.list)[i], ".pdf"))
+    dev.off()
+    
+    
+  }
+  
+}
+
+```
+
+### Export aggregated counts table
+```{r export_aggregated_counts}
+
+# create output dir
+output.dir <- paste0("results/tables/CD45Neg/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+if(long.compute){
+  
+  # Aggregate expression by cluster 
+  pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                        assays = "SCT",
+                                        return.seurat = TRUE, 
+                                        group.by = c("seurat_clusters"))
+  
+  # Write to file
+  temp.out <- GetAssayData(pseudo.cd45neg,
+                           layer = "data",
+                           assay = "SCT")
+  
+  write.csv(temp.out, paste0(output.dir, "CD45Neg_Aggregate_SCT_data_by_cluster.csv"))
+  
+  # Aggregate expression by cluster and treatment
+  pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                        assays = "SCT",
+                                        return.seurat = TRUE, 
+                                        group.by = c("seurat_clusters", "Treatment"))
+  # write to file
+  temp.out <- GetAssayData(pseudo.cd45neg,
+                           layer = "data",
+                           assay = "SCT")
+  
+  write.csv(temp.out, paste0(output.dir, "CD45Neg_Aggregate_SCT_data_by_cluster_and_treatment.csv"))
+  
+  # clean environment
+  rm(pseudo.cd45neg)
+  rm(temp.out)
+  
+}
 
 
 
-
+```
 
 
 
