@@ -26,16 +26,17 @@ Built with R version `r getRversion()`
 # B16 - OVA 
 
 # PDS = I.T - bind Gquadraplex
-# day 4 post-treatment 
 
-
-
+# Dataset 1 = day 4 post-treatment 
 
 # E4 = vehicle CD45Neg
 # F4 = vehicle CD45Pos
 # G4 = PDS CD45Neg
 # H4 = PDS CD45Pos
 
+# Dataset 2 = day 9 post-treatment 
+# E6 = vehicle CD45Pos
+# F6 = PDS CD45Pos
 
 # Research questions 
 # How does PDS induces an anti-tumor immune response?
@@ -126,6 +127,9 @@ source("scripts/Setup.R", local = knitr::knit_global())
 #remotes::install_github("satijalab/azimuth", "seurat5", quiet = TRUE)
 #remotes::install_github("satijalab/seurat-wrappers", "seurat5", quiet = TRUE)
 
+# Nebulosa / scCustomize has issues with ggplot2 v3.5.0, therefore ensure v3.4.4 is installed
+#devtools::install_version("ggplot2", version = '3.4.4')
+# but note for clusttree, require updated ggplot2 >= 3.5
 
 library("Seurat")
 library("SeuratObject")
@@ -339,13 +343,26 @@ if(long.compute){
   
   # change names of objects to more user friendly names 
   
+  # Day 4
   # E4 = vehicle CD45Neg
   # F4 = vehicle CD45Pos
   # G4 = PDS CD45Neg
   # H4 = PDS CD45Pos
   
+  # Day 9 
+  # E6 = vehicle CD45Pos
+  # F6 = PDS CD45Pos
+  
   names(seurat.list)
-  names(seurat.list) <- c("Vehicle_CD45Neg", "Vehicle_CD45Pos", "PDS_CD45Neg", "PDS_CD45Pos")
+  
+  names(seurat.list)[names(seurat.list) == "E4"] <- "Day4_Vehicle_CD45Neg"
+  names(seurat.list)[names(seurat.list) == "F4"] <- "Day4_Vehicle_CD45Pos"
+  names(seurat.list)[names(seurat.list) == "G4"] <- "Day4_PDS_CD45Neg"
+  names(seurat.list)[names(seurat.list) == "H4"] <- "Day4_PDS_CD45Pos"
+  
+  names(seurat.list)[names(seurat.list) == "E6"] <- "Day9_Vehicle_CD45Pos"
+  names(seurat.list)[names(seurat.list) == "F6"] <- "Day9_PDS_CD45Pos"
+  
   names(seurat.list)
   
   # create a vector of sequencing samples for later use in loops 
@@ -356,14 +373,18 @@ if(long.compute){
   # merge object for easier QC visualisation etc
   Nils.seurat <- scCustomize::Merge_Seurat_List(seurat.list, add.cell.ids = names(seurat.list))
   
-  Nils.seurat # 32,285 genes across 35,302 cells
+  Nils.seurat # 32,285 genes across 55,127 cells
   unique(Nils.seurat@meta.data$orig.ident)
   
-  Nils.seurat@meta.data$SampleID <- sub("^(.*?_.*?)(_.*)$", "\\1", rownames(Nils.seurat@meta.data))
-  Nils.seurat@meta.data$Treatment <- gsub("_.*", "", Nils.seurat@meta.data$SampleID)
+  # Use the sub function to replace the portion after the last underscore in each row name.
+  Nils.seurat@meta.data$SampleID <- sub("^(.*)_.*$", "\\1", rownames(Nils.seurat@meta.data))
+  Nils.seurat@meta.data$Time <- gsub("_.*", "", Nils.seurat@meta.data$SampleID)
+  Nils.seurat@meta.data$Treatment <- gsub("^[^_]+_([^_]+)_.*$", "\\1", Nils.seurat@meta.data$SampleID)
   Nils.seurat@meta.data$Compartment <- gsub(".*_", "", Nils.seurat@meta.data$SampleID)
   
+  
   unique(Nils.seurat@meta.data$SampleID)
+  unique(Nils.seurat@meta.data$Time)
   unique(Nils.seurat@meta.data$Treatment)
   unique(Nils.seurat@meta.data$Compartment)
   
@@ -384,9 +405,6 @@ if(long.compute){
 
 
 ```
-
-
-
 
 
 ## QC and Filter {.tabset}
@@ -710,13 +728,17 @@ if(long.compute){
   }
   
   Nils.seurat$CD45Neg  # 32,285 features by 13,562 cells
-  Nils.seurat$CD45Pos # 32,285 features by 18,032 cells | note that originally when filtering for ribosomal content only 13,511 cells were retained
+  Nils.seurat$CD45Pos # 32,285 features by 34,557 cells
   
   table(Nils.seurat$CD45Neg@meta.data$Treatment) # 7,698 PDS and 5,864 Vehicle
   
-  table(Nils.seurat$CD45Pos@meta.data$Treatment) # 8,082 PDS and 9,950 Vehicle
-  
-  
+  table(Nils.seurat$CD45Pos@meta.data$Treatment) # 17351 PDS and 17206 Vehicle
+  table(Nils.seurat$CD45Pos@meta.data$Time) # 18,032 Day 4 and 16,525 Day 9
+    table(Nils.seurat$CD45Pos@meta.data$Time, Nils.seurat$CD45Pos@meta.data$Treatment)
+        
+#        PDS Vehicle
+#  Day4 8082    9950
+ # Day9 9269    7256
   
 }
 
@@ -850,8 +872,8 @@ if(long.compute){
     
     for(j in seq_along(names(Nils.seurat))){
       
-      vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
-      
+      vars.plot <- c("Treatment", "SampleID", "seurat_clusters", "Time")
+
       for(i in seq_along(vars.plot)){
         
         
@@ -900,11 +922,6 @@ if(long.compute){
 }
 
 ```
-
-
-
-
-
 
 
 ## Cluster identification and UMAP optimisation {.tabset}
@@ -1023,15 +1040,15 @@ if(long.compute){
   # Set resolution level | and set seurat_clusters
   ##################################################
   
- # emperically picked resolution of: 
-  # CD45Pos = 0.5
+  # emperically picked resolution of: 
+  # CD45Pos = 0.4
   # CD45Neg = 0.4
   
   # set seurat clusters to this level 
-  Nils.seurat$CD45Pos@meta.data$seurat_clusters <- Nils.seurat$CD45Pos@meta.data$SCT_snn_res.0.5
+  Nils.seurat$CD45Pos@meta.data$seurat_clusters <- Nils.seurat$CD45Pos@meta.data$SCT_snn_res.0.4
   Nils.seurat$CD45Neg@meta.data$seurat_clusters <- Nils.seurat$CD45Neg@meta.data$SCT_snn_res.0.4
   
-  length(unique(Nils.seurat$CD45Pos@meta.data$seurat_clusters)) # 16 clusters
+  length(unique(Nils.seurat$CD45Pos@meta.data$seurat_clusters)) # 17 clusters
   length(unique(Nils.seurat$CD45Neg@meta.data$seurat_clusters)) # 12 clusters
   
   
@@ -1042,7 +1059,7 @@ if(long.compute){
           label = T,
           group.by = c("seurat_clusters")) + 
     NoLegend() + 
-    ggtitle("SCT_snn_res.0.5")
+    ggtitle("SCT_snn_res.0.4")
   
   dev.copy(pdf, paste0(output.dir, "UMAP_CD45Pos_dataset_seurat_clusters.pdf"))
   dev.off()
@@ -1151,7 +1168,19 @@ if(long.compute){
                         reduction = "integrated.cca.sct",
                         dims = 1:30)
   
+  Seurat::DimPlot(object = Nils.seurat$CD45Neg, 
+                  reduction = "umap", 
+                  label = TRUE, 
+                  label.size = 4, 
+                  group.by = "seurat_clusters") +
+    NoLegend()
   
+   Seurat::DimPlot(object = Nils.seurat$CD45Pos, 
+                  reduction = "umap", 
+                  label = TRUE, 
+                  label.size = 4, 
+                  group.by = "seurat_clusters") +
+    NoLegend()
 }
 
 ```
@@ -1162,338 +1191,6 @@ if(long.compute){
 if(long.compute){
   
   library("SeuratObject")
-  
-  SaveSeuratRds(Nils.seurat$CD45Pos, 
-                file = "saves/Nils_seurat_CD45Pos.rds")
-  
-  SaveSeuratRds(Nils.seurat$CD45Neg, 
-                file = "saves/Nils_seurat_CD45Neg.rds")
-  
-}
-
-```
-
-
-
-
-
-
-
-
-
-### Archive #####
-### Archive #####
-
-
-
-
-## Clean datasets {.tabset}
-
-### CD45Neg - remove contamination immune clusters
-```{r CD45Neg_remove_immune_contamination}
-
-if(long.compute){
-  
-  # create output dir
-  output.dir <- paste0("results/CD45Neg_immune_contamination/")
-  
-  if(!dir.exists(output.dir)){
-    dir.create(output.dir, 
-               recursive = T)
-    
-  }
-  
-  
-  # cluster 18 and cluster 10 look to be immune contaimination 
-  
-  head(Nils.seurat$CD45Neg@meta.data)
-  
-  
-  
-  # set assay
-  DefaultAssay(Nils.seurat$CD45Neg) <- "SCT"
-  
-  
-  # set idents
-  Idents(Nils.seurat$CD45Neg) <- "seurat_clusters"
-  
-  # read deg file 
-  input.dir <- "results/CD45Neg_DEG_analysis/"
-  
-  CD45Neg.de <- read.csv(paste0(input.dir, "CD45Neg_DEGs.csv"))
-  
-  
-  # aggregate expression for heatmap visualisation
-  
-  pseudo.cd45neg <- AggregateExpression(Nils.seurat$CD45Neg,
-                                        assays = "SCT",
-                                        return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters"))
-  
-  
-  
-  # check cluster 18 as immune contamination 
-  
-  goi <- CD45Neg.de %>%
-    filter(p_val_adj < 0.05) %>%
-    filter(cluster == "18") %>%
-    top_n(50, avg_log2FC) %>%
-    pull(gene)
-  
-  goi
-  
-  
-  DoHeatmap(pseudo.cd45neg, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_top_50_DEGs_pseudobulk_CD45Neg_cluster_18.pdf"))
-  dev.off()
-  
-  
-  # specifically immune markers
-  goi <- c("Cd3e", "Cd3g", "Cd3d", "Cd8a", "Cd8b", "Cd4", "Ncam1", "Ncr1", "Cd19", "Cd20", "Il7r", "Cd14")
-  
-  DoHeatmap(pseudo.cd45neg, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_immune_genes_CD45Neg_cluster_18.pdf"))
-  dev.off()
-  
-  
-  
-  scCustomize::Cluster_Highlight_Plot(Nils.seurat$CD45Neg,
-                                      cluster_name = "18")
-  
-  dev.copy(pdf, paste0(output.dir, "UMAP_immune_contamination_cluster_18.pdf"))
-  dev.off()
-  
-  
-  # yes, cluster 18 is a small cluster that appears to be immune contamination 
-  table(Nils.seurat$CD45Neg@meta.data$seurat_clusters) # cluster 18 = 265 cells
-  
-  # remove this cluster from dataset 
-  Idents(Nils.seurat$CD45Neg) <- Nils.seurat$CD45Neg@meta.data$seurat_clusters
-  Nils.seurat$CD45Neg <- subset(Nils.seurat$CD45Neg, idents = "18", invert = TRUE)
-  unique(Idents(Nils.seurat$CD45Neg))
-  
-  
-  
-  # inspect cluster 10 - granulocytes
-  
-  
-  scCustomize::Cluster_Highlight_Plot(Nils.seurat$CD45Neg,
-                                      cluster_name = "10")
-  
-  dev.copy(pdf, paste0(output.dir, "UMAP_immune_contamination_cluster_10.pdf"))
-  dev.off()
-  
-  # cluster 10 is a medium to large ish group 
-  table(Nils.seurat$CD45Neg@meta.data$seurat_clusters) # cluster 10 = 619 cells
-  
-  
-  
-  
-  
-  # check cluster 10 top genes
-  
-  goi <- CD45Neg.de %>%
-    filter(p_val_adj < 0.05) %>%
-    filter(cluster == "10") %>%
-    top_n(50, avg_log2FC) %>%
-    pull(gene)
-  
-  goi
-  
-  # add cd14 to goi if not already there
-  goi <- unique(c(goi, "Cd14"))
-  DoHeatmap(pseudo.cd45neg, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-  dev.copy(pdf, paste0(output.dir, "Heatmap_top_50_DEGs_pseudobulk_CD45Neg_cluster_10.pdf"))
-  dev.off()
-  
-  
-  
-  
-  # cluster 10 probs granulocyte contam - remove this cluster 
-  
-  # remove this cluster from dataset 
-  Idents(Nils.seurat$CD45Neg) <- Nils.seurat$CD45Neg@meta.data$seurat_clusters
-  Nils.seurat$CD45Neg <- subset(Nils.seurat$CD45Neg, idents = "10", invert = TRUE)
-  unique(Idents(Nils.seurat$CD45Neg))
-  
-  
-  
-  
-  # quick vis of endo/markers 
-  
-  # Endo = CLDN5
-  # Epithelial = KRT17, KRT14
-  
-  
-  goi <- grep("Krt.*", rownames(pseudo.cd45neg), value = T)
-  goi <- grep("Cld.*", rownames(pseudo.cd45neg), value = T)
-  goi <- c(goi, "Cd34", "Cd14")
-  DoHeatmap(pseudo.cd45neg, 
-            features = goi, 
-            draw.lines = FALSE, 
-            raster = FALSE)
-  
-}
-
-```
-
-
-## Renormalise / integrate / dim reduction | after removing contamination immune cells {.tabset}
-
-## re-calculate normalisation and integration for CD45Neg dataset
-```{r re_normalise_and_integrate_CD45Neg_dataset}
-
-if(long.compute){
-  
-  
-  # split object up based on sequencing run / in seurat V5 these are splitting the layers
-  Nils.seurat$CD45Neg[["RNA"]] <- split(Nils.seurat$CD45Neg[["RNA"]],  f = Nils.seurat$CD45Neg$SampleID)
-  
-  DefaultAssay(Nils.seurat$CD45Neg) <- "RNA"
-  
-  
-  
-  
-  #####################################################
-  # Normalise with scTransform and integrate data
-  #####################################################
-  # note error with more recent version of matrixStats resulting in "useNames = NA is defunct" error. downgrade to matrixStats version 1.1.0 as a workaround
-  # https://github.com/satijalab/seurat/issues/7501#issuecomment-1854571904
-  #remotes::install_version("matrixStats", version="1.1.0") # restart your session and run previous scripts  
-  
-  
-  
-  # note RNA assay is split into run level layers, below script will apply normalisation etc layer-wise
-  
-  Nils.seurat$CD45Neg <- Nils.seurat$CD45Neg %>%
-    SCTransform(method = "glmGamPoi", 
-                vars.to.regress = "percent_mito", 
-                vst.flavor = "v2",
-                verbose = TRUE) %>%
-    RunPCA(reduction.name = "pca_sct") %>%
-    RunUMAP(reduction = "pca_sct", 
-            dims = 1:30, 
-            reduction.name = "umap.unintegrated.sct")
-  
-  
-  
-  DefaultAssay(Nils.seurat$CD45Neg) <- "SCT"
-  
-  
-  # integrate layers using cca integration and calculate dim redu and cluster identification
-  
-  # cluster resolution value based on previous estimation 
-  clust.res <- 1.3
-  
-  
-  Nils.seurat$CD45Neg <- Nils.seurat$CD45Neg %>%
-    IntegrateLayers(orig.reduction = "pca_sct",
-                    new.reduction = "integrated.cca.sct",
-                    method = CCAIntegration,
-                    normalization.method = "SCT",
-                    verbose = F) %>%
-    FindNeighbors(dims = 1:30,
-                  reduction = "integrated.cca.sct") %>%
-    FindClusters(resolution = clust.res, 
-                 cluster.name = "clusters_cca_sct") %>%
-    RunUMAP(reduction = "integrated.cca.sct",
-            dims = 1:30, 
-            reduction.name = "umap")
-  
-  
-}
-
-
-
-```
-
-
-## plot integration after removing contamination immune cells from CD45Neg dataset 
-
-```{r plot_integration_after_removing_contamination}
-
-if(long.compute){
-  
-  if(do.plot){
-    
-    # create output dir
-    output.dir <- paste0("results/CD45Neg_dataset_overview_after_removing_immune_contamination/")
-    
-    if(!dir.exists(output.dir)){
-      dir.create(output.dir, 
-                 recursive = T)
-      
-    }
-    
-    # set variables
-    unintegrated.reduction <- "umap.unintegrated.sct"
-    integrated.reduction <- "umap"
-    title.var <- "SCT"
-    
-    
-    
-    # evaluate integration and dim reduction
-    
-    # set default assay
-    DefaultAssay(Nils.seurat$CD45Neg) <- "SCT"
-    
-    
-    
-    
-    vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
-    
-    
-    for(i in seq_along(vars.plot)){
-      
-      
-      # remove "." from name
-      name.var <- gsub("\\.", "_", vars.plot[i])
-      
-      before.int <- DimPlot(Nils.seurat$CD45Neg,
-                            reduction = unintegrated.reduction, 
-                            label = T,
-                            group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("Unintegrated ", title.var, " Normalisation"))
-      
-      after.int <- DimPlot(Nils.seurat$CD45Neg,
-                           reduction = integrated.reduction, 
-                           label = T,
-                           group.by = vars.plot[i]) + NoLegend() + ggtitle(paste0("CCA Integration using ", title.var, " Normalisation"))
-      
-      print(before.int | after.int)
-      dev.copy(pdf, paste0(output.dir, "UMAP_before_after_integration_", name.var, "_", names(Nils.seurat)[j], "_dataset.pdf"))
-      dev.off()
-      
-      
-      
-    }
-  }
-  
-  
-}
-
-
-
-```
-
-
-### Save final cleaned seurat objects
-```{r save_seurat_object_final}
-
-if(long.compute){
-  
-  library("SeuratDisk")
   
   SaveSeuratRds(Nils.seurat$CD45Pos, 
                 file = "saves/Nils_seurat_CD45Pos.rds")
