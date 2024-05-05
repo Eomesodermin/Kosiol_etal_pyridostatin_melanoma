@@ -75,7 +75,7 @@ cat("\014")     #Clean Console
 gc() # Free memory
 
 # pipeline variables
-long.compute <- TRUE
+long.compute <- FALSE
 do.plot <- TRUE
 quick.load <- TRUE
 
@@ -89,53 +89,32 @@ setwd("..")
 # Create output directories & load custom functions & colour scheme
 source("scripts/Setup.R", local = knitr::knit_global())
 
-# Nebulosa / scCustomize has issues with ggplot2 v3.5.0, therefore ensure v3.4.4 is installed
-#devtools::install_version("ggplot2", version = '3.4.4')
-# but note for clusttree, require updated ggplot2 >= 3.5
+# function found in Setup.R script
+ggplot2_switch_version(desired_version = "3.4.4")
 
 library("Seurat")
 library("SeuratObject")
-library("SeuratData")
+#library("SeuratData")
 library("SeuratWrappers")
 library("dplyr")
 library("scCustomize")
 library("tibble")
 library("ggplot2")
 
-########################################
-# Parallelization of seurat functions
-########################################
 
-parallelization <- TRUE
-
-
-if(parallelization){
-  library(future)
-  # check the current active plan
-  plan()
+# load output from preprocessing script
+if(long.compute){
   
-  # detect cores
-  ncores <- parallel::detectCores()
-  ncores <- ncores-5
-  # set plan
-  plan("multisession", workers = ncores)
-  plan()
-  
-  # set max limit for global variables
-  # note this will drastically increase RAM usage, be aware of machine limits
-  # set value is in bites therefore 1000*1024^2 = 1GB Therefore set to 10GBs 
-  options(future.globals.maxSize = 10000 * 1024^2, 
-          future.rng.onMisuse="ignore") 
-}
-
-
-
-if(quick.load){
-  
-  CD45neg.seurat <- LoadSeuratRds("saves/Nils_seurat_CD45Neg.rds")
+  CD45neg.seurat <- LoadSeuratRds("saves/Preprocessed_CD45Neg.rds")
   
   # set levels for easier downstream plotting 
   CD45neg.seurat@meta.data$Treatment <- factor(CD45neg.seurat@meta.data$Treatment, levels = c("Vehicle", "PDS"))
+  
+}else if(quick.load){
+  
+  # load cleaned dataset 
+  CD45neg.seurat <- LoadSeuratRds("saves/CD45neg_seurat.rds")
+  
   
 }
 ```
@@ -144,7 +123,7 @@ if(quick.load){
 ## Clean dataset {.tabset}
 
 ## Identifying Immune cell contamination - SingleR cluster annotation
-```{r SingleR_cluster_annotation}
+```{r SingleR_cluster_annotation_initial}
 
 # Notes:
 # there is an error with collect() when trying to load celldex datasets
@@ -236,86 +215,86 @@ if(long.compute){
 ```{r CD45_and_granulocyte_lineage_gene_visualisation}
 
 if(long.compute){
-
-# create output dir
-output.dir <- paste0("results/CD45Neg_Immune_cell_contamination/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
   
-}
-
-
-# list melanocyte genes 
-goi <- c("Ptprc", "Cd14")
-
-# Plot Feature and Density plots iteratively over goi 
-for(i in seq_along(goi)){
+  # create output dir
+  output.dir <- paste0("results/CD45Neg_Immune_cell_contamination/")
   
-  # feature plots
-  print(
-    scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
-                                      reduction = "umap", 
-                                      features = goi[i])
+  if(!dir.exists(output.dir)){
+    dir.create(output.dir, 
+               recursive = T)
     
-  )
+  }
   
-  dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_", goi[i], ".pdf"))
+  
+  # list melanocyte genes 
+  goi <- c("Ptprc", "Cd14")
+  
+  # Plot Feature and Density plots iteratively over goi 
+  for(i in seq_along(goi)){
+    
+    # feature plots
+    print(
+      scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
+                                        reduction = "umap", 
+                                        features = goi[i])
+      
+    )
+    
+    dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_", goi[i], ".pdf"))
+    dev.off()
+    
+    
+    # density plots
+    
+    print(
+      scCustomize::Plot_Density_Custom(CD45neg.seurat, 
+                                       reduction = "umap",
+                                       features = goi[i], 
+                                       custom_palette = batlow.pal)
+    )
+    dev.copy(pdf, paste0(output.dir, "UMAP_DensityPlot_CD45Neg_", goi[i], ".pdf"))
+    dev.off()
+    
+    
+    
+  }
+  
+  
+  ##############################
+  # Stacked vln plot
+  ##############################
+  
+  scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
+                               features = goi,
+                               group.by = "seurat_clusters",
+                               pt.size = 0)
+  
+  dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_granulocyte_markers.pdf"))
   dev.off()
   
   
-  # density plots
+  ###########
+  # heatmap
+  ###########
   
-  print(
-    scCustomize::Plot_Density_Custom(CD45neg.seurat, 
-                                     reduction = "umap",
-                                     features = goi[i], 
-                                     custom_palette = batlow.pal)
-  )
-  dev.copy(pdf, paste0(output.dir, "UMAP_DensityPlot_CD45Neg_", goi[i], ".pdf"))
+  # aggregate expression for heatmap visualisation
+  pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
+                                        assays = "SCT",
+                                        return.seurat = TRUE, 
+                                        group.by = c("seurat_clusters"))
+  
+  DoHeatmap(pseudo.cd45neg, 
+            features = goi, 
+            draw.lines = FALSE, 
+            angle = 90,
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_granulocyte_markers.pdf"))
   dev.off()
   
-  
-  
-}
-
-
-##############################
-# Stacked vln plot
-##############################
-
-scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
-                             features = goi,
-                             group.by = "seurat_clusters",
-                             pt.size = 0)
-
-dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_granulocyte_markers.pdf"))
-dev.off()
-
-
-###########
-# heatmap
-###########
-
-# aggregate expression for heatmap visualisation
-pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
-
-DoHeatmap(pseudo.cd45neg, 
-          features = goi, 
-          draw.lines = FALSE, 
-          angle = 90,
-          raster = FALSE) + 
-  scico::scale_fill_scico(palette = "batlow", 
-                          direction = 1, 
-                          na.value = "white")
-
-dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_granulocyte_markers.pdf"))
-dev.off()
-
 }
 
 
@@ -327,10 +306,10 @@ dev.off()
 
 if(long.compute){
   
-    # cluster 5 looks to be immune contaimination 
+  # cluster 6 looks to be immune contaimination 
   
   # set immune cell cluster variable
-  Immune.cell.cluster <- 5
+  Immune.cell.cluster <- 6
   
   
   head(CD45neg.seurat@meta.data)
@@ -342,8 +321,8 @@ if(long.compute){
   # set idents
   Idents(CD45neg.seurat) <- "seurat_clusters"
   
-  # immune cell contamination cluster is relatively small, sharp drop of in cluster sizes at cluster 4
-  table(CD45neg.seurat@meta.data$seurat_clusters) # cluster 5 = 617 cells
+  # immune cell contamination cluster is relatively small, sharp drop of in cluster sizes at cluster 5
+  table(CD45neg.seurat@meta.data$seurat_clusters) # cluster 6 = 735 cells
   
   # remove this cluster from dataset 
   Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$seurat_clusters
@@ -423,8 +402,6 @@ if(long.compute){
   
 }
 
-
-
 ```
 
 
@@ -457,7 +434,7 @@ if(long.compute){
     # set default assay
     DefaultAssay(CD45neg.seurat) <- "SCT"
     
-  
+    
     
     vars.plot <- c("Treatment", "SampleID", "seurat_clusters")
     
@@ -494,20 +471,7 @@ if(long.compute){
 ```
 
 
-### Save final cleaned seurat objects
-```{r save_seurat_object_final}
-
-if(long.compute){
-  
-  library("SeuratDisk")
-
-  SaveSeuratRds(CD45neg.seurat, 
-                file = "saves/Nils_seurat_CD45Neg.rds")
-  
-}
-
-```
-
+# saved a cleaned object here
 
 ## Cluster annotation {.tabset}
 
@@ -563,11 +527,11 @@ if(long.compute){
   ######################
   # Fine labels 
   ######################
-  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.fine)
+  SingleR.pred.fine <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                               ref = ref.mouse, 
+                               method = "cluster",
+                               clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                               labels = ref.mouse$label.fine)
   
   # Plot 
   p1 <- plotScoreHeatmap(SingleR.pred, 
@@ -583,11 +547,11 @@ if(long.compute){
   # Main labels 
   ######################
   
-  SingleR.pred <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
-                          ref = ref.mouse, 
-                          method = "cluster",
-                          clusters = CD45neg.seurat@meta.data$seurat_clusters,
-                          labels = ref.mouse$label.main)
+  SingleR.pred.main <- SingleR(test = CD45neg.seurat@assays$SCT$data, 
+                               ref = ref.mouse, 
+                               method = "cluster",
+                               clusters = CD45neg.seurat@meta.data$seurat_clusters,
+                               labels = ref.mouse$label.main)
   
   # Plot 
   p1 <- plotScoreHeatmap(SingleR.pred, 
@@ -598,6 +562,386 @@ if(long.compute){
 }
 
 ```
+
+
+### Transfer SingleR annotations to seurat object 
+```{r transfer_singleR_annotations}
+
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Neg_SingleR/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  
+  ########################################
+  # transfer labels to seurat object 
+  ########################################
+  
+  table(predicted=SingleR.pred.main$labels, cluster=rownames(SingleR.pred.main))
+  table(predicted=SingleR.pred.fine$labels, cluster=rownames(SingleR.pred.fine))
+  
+  # Main labels
+  main.labels <- SingleR.pred.main$labels
+  names(main.labels) <- rownames(SingleR.pred.main)
+  
+  # Fine labels
+  fine.labels <- SingleR.pred.fine$labels
+  names(fine.labels) <- rownames(SingleR.pred.fine)
+  
+  ####################
+  # rename clusters 
+  ####################
+  
+  # Main labels
+  Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$seurat_clusters
+  CD45neg.seurat <- Rename_Clusters(CD45neg.seurat, new_idents = main.labels)
+  CD45neg.seurat@meta.data$SingleR_main <- Idents(CD45neg.seurat)
+  
+  # Fine labels
+  Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$seurat_clusters
+  CD45neg.seurat <- Rename_Clusters(CD45neg.seurat, new_idents = fine.labels)
+  CD45neg.seurat@meta.data$SingleR_fine <- Idents(CD45neg.seurat)
+  
+  
+  ############
+  # Visualise
+  ############
+  
+  # Main label
+  p.main <- scCustomize::DimPlot_scCustom(CD45neg.seurat, 
+                                          group.by = "SingleR_main", 
+                                          label = TRUE,
+                                          reduction = "umap")
+  
+  print(p.main)
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_main.pdf"))
+  dev.off()
+  
+  
+  # Fine label
+  p.fine <- scCustomize::DimPlot_scCustom(CD45neg.seurat, 
+                                          group.by = "SingleR_fine", 
+                                          label = TRUE,
+                                          reduction = "umap")
+  
+  print(p.fine)
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_fine.pdf"))
+  dev.off()
+  
+  
+  # side-by-side with cluster numbers
+  p.clusters <- scCustomize::DimPlot_scCustom(CD45neg.seurat, 
+                                              group.by = "seurat_clusters", 
+                                              label = TRUE,
+                                              reduction = "umap")
+  
+  # clusters plus main
+  print(p.clusters | p.main)
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_main_plus_clusters.pdf"))
+  dev.off()
+  
+  # clusters plus fine
+  print(p.clusters | p.fine)
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_singleR_annotations_fine_plus_clusters.pdf"))
+  dev.off()
+  
+  
+}
+
+
+```
+
+### SCEVAN Copy number analysis
+```{r copy_number_analysis}
+
+if(long.compute){
+  
+  
+  output.dir <- "results/CD45Neg_SCEVAN/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  
+  #library(devtools)
+  #install_github("miccec/yaGST")
+  #install_github("AntonioDeFalco/SCEVAN")
+  library(SCEVAN)
+  
+  DefaultAssay(CD45neg.seurat) <- "RNA"
+  CD45neg.seurat <- JoinLayers(CD45neg.seurat)
+  
+  
+  count.matrix <- LayerData(CD45neg.seurat, assay = "RNA", layer = "counts")
+  
+  results.out.single.object <- pipelineCNA(count_mtx = count.matrix, 
+                                           sample = "CD45Neg_dataset", 
+                                           par_cores = 20, 
+                                           organism = "mouse", 
+                                           SUBCLONES = TRUE, 
+                                           beta_vega = 0.5, 
+                                           ClonalCN = TRUE, 
+                                           plotTree = TRUE)
+  
+  CD45neg.seurat <-Seurat::AddMetaData(CD45neg.seurat, metadata = results.out.single.object)
+  CD45neg.seurat@meta.data
+  
+  
+  # export object
+  saveRDS(results.out.single.object, file = "saves/results_out_single_object.rds")
+
+  # Visualise results of copy number variance analysis
+  
+  # Tumor or normal identity by Copy Number
+  
+  DimPlot_scCustom(CD45neg.seurat, 
+                   group.by = "class", 
+                   reduction = "umap")
+  dev.copy(pdf, paste0(output.dir, "UMAP_class_CNA_identity.pdf"))
+  dev.off()
+  
+  # Tumor Subclone ID
+  # switch to dimplot, cause NA and 1 end up similar gray if using scCustomise package dimplot function
+  
+  DimPlot(CD45neg.seurat, 
+          group.by = "subclone",
+          reduction = "umap")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_subclone_identity.pdf"))
+  dev.off()
+  
+  
+  # Single R main identity across class
+  DimPlot_scCustom(CD45neg.seurat,
+                   group.by = "SingleR_main", 
+                   split.by = "class", 
+                   reduction = "umap")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_SingleR_main_across_class.pdf"))
+  dev.off()
+  
+  # Single R fine identity across class
+  DimPlot_scCustom(CD45neg.seurat,
+                   group.by = "SingleR_fine",
+                   split.by = "class", 
+                   reduction = "umap")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_SingleR_fine_across_class.pdf"))
+  dev.off()
+  
+  # Seurat clusters across class 
+  DimPlot_scCustom(CD45neg.seurat,
+                   group.by = "seurat_clusters", 
+                   split.by = "class", 
+                   label = TRUE,
+                   reduction = "umap")
+  
+  dev.copy(pdf, paste0(output.dir, "UMAP_Seurat_clusters_across_class.pdf"))
+  dev.off()
+  
+}
+
+
+```
+
+### Annotate clusters and clean up seurat object and export
+```{r annotate_clusters}
+
+
+
+if(long.compute){
+  
+  output.dir <- "results/CD45Neg_unifying_cluster_annotations/"
+  
+  # Create output directory
+  if(!dir.exists(paste0(output.dir))){
+    dir.create(paste0(output.dir), 
+               recursive = T)
+  }
+  
+  
+  DimPlot_scCustom(CD45neg.seurat,
+                   group.by = "seurat_clusters", 
+                   split.by = "class", 
+                   label = TRUE,
+                   reduction = "umap")
+  
+  
+  
+  # Unify CNA definition of tumor with singleR definitions 
+  out.df <- table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$class)
+  row.vals <- rowSums(out.df)
+  freq.class.id <- sweep(out.df, 1, row.vals, "/")
+  rowSums(freq.class.id*100) # sanity check
+  freq.class.id <- freq.class.id*100
+  
+  
+  ggplot(freq.class.id) +
+    aes(x = Var1, y = Freq, fill = Var2) +
+    geom_col() +
+    scale_fill_hue(direction = 1) +
+    labs(x = "Seurat_cluster", y = "Frequency", title = "Frequency of normal/tumor in each seurat_cluster") +
+    theme_minimal()
+  
+  ggsave(paste0(output.dir, "Barplot_frequency_of_seurat_cluster_by_class_identity.pdf"), width = 8, height = 4)
+  
+  # Tumor clusters are: 
+  # 0, 1, 4, 5, 6, 8, 9
+  
+  # Normal clusters are: 
+  # 2, 3, 7, 13
+  
+  # unclear: 
+  # 11, 10, 12
+  
+  # cluster 10 
+  # will be called normal 
+  # shows up roughly evenly between normal and tumor but doesnt cluster with rest of tumor cells
+  # also not predicted to be fibroblast type origin 
+  # looks to be erythrocyte origin 
+  
+  # cluster 11
+  # will be called normal (79%)
+  # does cluster with tumor cells and is precited to be of fibroblast cell type 
+  # but perhaps this is a normal non tumor fibroblast cells
+  
+  # cluster 12
+  # will be called normal (78%)
+  # doesnt cluster with rest of tumor and is of predicted cardiomyocyte cell type 
+  
+  # set a threshold to id clusters
+  freq.class.id <- freq.class.id[,c(2,3)]
+  freq.class.id > 80
+  
+  
+  # add these definitions to metadata
+  tumor.clusters <- c("0", "1", "4", "5", "6", "8", "9")
+  normal.clusters <- c("2", "3", "7", "10", "11", "12", "13")
+  
+  
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::mutate(Disease = case_when(
+      seurat_clusters %in% tumor.clusters ~ "tumor", 
+      seurat_clusters %in% normal.clusters ~ "normal", 
+      TRUE ~ "error")) 
+  
+  # sanity check
+  unique(CD45neg.seurat@meta.data$Disease)
+  table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$Disease)
+  
+  
+  # clean up subclone anno so it only exists for tumor clusters 
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::mutate(subclone = case_when(
+      seurat_clusters %in% normal.clusters ~ "normal", 
+      seurat_clusters %in% tumor.clusters ~ as.character(subclone), 
+      TRUE ~ "error")) %>%
+    dplyr::mutate(subclone = coalesce(subclone, "undefined"))
+  
+  
+  table(CD45neg.seurat@meta.data$Disease, CD45neg.seurat@meta.data$subclone)
+  
+  
+  # create an annotation id that merges results from singleR findings etc
+  table(CD45neg.seurat@meta.data$SingleR_fine, CD45neg.seurat@meta.data$SingleR_main)
+  table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$SingleR_main)
+  
+  # note below code only works if cardio, endo, and eryth are only 1 cluster and not spread across clusters 
+  
+  # uniform ID of cardio, erythro, and endothelial cells 
+  # adipo and fibro cells are mixed with fine annotation in becoming activated fibro, fibro, NPCs? 
+  # convert to just call these fibro_adipo cells if not tumor 
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::mutate(cluster_anno = case_when(
+      SingleR_main == "Cardiomyocytes" ~  "Cardiomyocytes",
+      SingleR_main == "Endothelial cells" ~  "Endothelial_cells",
+      SingleR_main == "Erythrocytes" ~  "Erythrocytes",
+      seurat_clusters %in% tumor.clusters ~ paste0("Tumor_", seurat_clusters), 
+      seurat_clusters %in% normal.clusters ~ SingleR_main,
+      TRUE ~ "error")) 
+  
+  
+  unique(CD45neg.seurat@meta.data$cluster_anno)
+  
+  # clean up seurat object to prevent mistakenly using wrong metadata annotation 
+  colnames(CD45neg.seurat@meta.data)
+  head(CD45neg.seurat@meta.data)
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::select(c("orig.ident", "nCount_RNA", "nFeature_RNA", "nCount_SCT", "nFeature_SCT", 
+                    "percent_mito", "percent_ribo", "percent_mito_ribo", "log10GenesPerUMI", 
+                    "seurat_clusters", "SampleID", "Time", "Treatment", "Compartment", 
+                    "SingleR_main", "SingleR_fine", "Disease", "subclone", "cluster_anno"))
+  
+  
+  
+  # rename tumor clusters to have sequential numbers as opposed to the seruat cluster numbers they currently have 
+  # make a new column, because renaming might overwride as move along rows and names become similar with time 
+  # therefore make new column and then remove the whole column and replace it 
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::mutate(cluster_anno_new = case_when(
+      cluster_anno == "Tumor_0" ~  "Tumor_0",
+      cluster_anno == "Tumor_1" ~  "Tumor_1",
+      cluster_anno == "Tumor_4" ~  "Tumor_2",
+      cluster_anno == "Tumor_5" ~  "Tumor_3",
+      cluster_anno == "Tumor_6" ~  "Tumor_4",
+      cluster_anno == "Tumor_8" ~  "Tumor_5",
+      cluster_anno == "Tumor_9" ~  "Tumor_6", 
+      TRUE ~ cluster_anno))
+  
+  table(CD45neg.seurat@meta.data$cluster_anno, CD45neg.seurat@meta.data$cluster_anno_new)
+  
+  # replace old anno with new and clean up 
+  CD45neg.seurat@meta.data$cluster_anno <- CD45neg.seurat@meta.data$cluster_anno_new
+  CD45neg.seurat@meta.data$cluster_anno_new <- NULL
+  
+  
+  
+  # set factorisation 
+  CD45neg.seurat@meta.data$Treatment <- factor(CD45neg.seurat@meta.data$Treatment, 
+                                               levels = c("Vehicle", "PDS"))
+  
+  CD45neg.seurat@meta.data$SampleID <- factor(CD45neg.seurat@meta.data$SampleID, 
+                                              levels = c("Day4_Vehicle_CD45Neg", "Day4_PDS_CD45Neg"))
+  
+  
+  CD45neg.seurat@meta.data$seurat_clusters <- factor(CD45neg.seurat@meta.data$seurat_clusters)
+  
+  CD45neg.seurat@meta.data$Disease <- factor(CD45neg.seurat@meta.data$Disease, 
+                                             levels = c("normal", "tumor"))
+  
+  CD45neg.seurat@meta.data$subclone <- factor(CD45neg.seurat@meta.data$subclone, 
+                                              levels = c("normal", "1", "2", "3", "4", "5", "undefined"))
+  
+  CD45neg.seurat@meta.data$cluster_anno <- factor(CD45neg.seurat@meta.data$cluster_anno, 
+                                                  levels = c("Cardiomyocytes", "Endothelial_cells", "Erythrocytes", "Fibroblasts", "Tumor_0", "Tumor_1", "Tumor_2", "Tumor_3", "Tumor_4", "Tumor_5", "Tumor_6"))
+  
+  
+  
+  # save output
+  SaveSeuratRds(CD45neg.seurat, file = "saves/CD45neg_seurat.rds")
+  
+}
+
+
+
+```
+
+
 
 
 ## Overview of dataset {.tabset}
@@ -621,9 +965,9 @@ if(do.plot){
   
   # set assay
   DefaultAssay(CD45neg.seurat) <- "SCT"
+  head(CD45neg.seurat)
   
-  
-  vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters")
+  vars.to.plot <- c("Treatment", "SampleID", "seurat_clusters", "cluster_anno", "Disease", "subclone")
   
   
   for(j in seq_along(vars.to.plot)){
@@ -650,15 +994,30 @@ if(do.plot){
                                   reduction = "umap", 
                                   label = TRUE,
                                   figure_plot = TRUE,
-                                  group.by = "seurat_clusters", 
+                                  group.by = "cluster_anno", 
                                   split.by = "Treatment") 
   )
   
   
-  dev.copy(pdf, paste0(output.dir, "CD45Neg_UMAP_seurat_clusters_split_by_treatment.pdf"))
+  dev.copy(pdf, paste0(output.dir, "CD45Neg_UMAP_cluster_anno_split_by_treatment.pdf"))
   dev.off()
   
-}
+
+    print(
+    scCustomize::DimPlot_scCustom(CD45neg.seurat,
+                                  reduction = "umap", 
+                                  label = TRUE,
+                                  figure_plot = TRUE,
+                                  group.by = "Disease", 
+                                  split.by = "Treatment") 
+  )
+  
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Neg_UMAP_Disease_split_by_treatment.pdf"))
+  dev.off()
+  
+  
+  }
 
 
 ```
@@ -679,7 +1038,7 @@ if(!dir.exists(output.dir)){
 # Number of cells per cluster
 #############################################
 
-cluster.n <- table(CD45neg.seurat@meta.data$seurat_clusters)
+cluster.n <- table(CD45neg.seurat@meta.data$cluster_anno)
 
 cluster.n <- as.data.frame(cluster.n)
 cluster.n$Var1 <- factor(cluster.n$Var1, levels = cluster.n$Var1)
@@ -701,7 +1060,7 @@ ggsave(paste0(output.dir, "Barplot_number_of_cells_per_cluster.pdf"))
 # Freq of clusters across treatment 
 #############################################
 
-dist.table <- table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$Treatment)
+dist.table <- table(CD45neg.seurat@meta.data$cluster_anno, CD45neg.seurat@meta.data$Treatment)
 
 treatment.total <- colSums(dist.table)
 
@@ -727,6 +1086,71 @@ ggplot(freq.table) +
   facet_wrap(vars(Var1))
 
 ggsave(paste0(output.dir, "Barplot_freq_of_clusters_per_treatment.pdf"))
+
+
+#############################################
+# Freq of disease across treatment 
+#############################################
+
+dist.table <- table(CD45neg.seurat@meta.data$Disease, CD45neg.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Treatment", y = "% of treatment", title = "Frequency of disease per treatment") +
+  scale_fill_manual(values = c(Vehicle = "grey", PDS = "darkred")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_disease_per_treatment.pdf"))
+
+
+
+
+#############################################
+# Freq of tumor subclones across treatment
+#############################################
+
+dist.table <- table(CD45neg.seurat@meta.data$subclone, CD45neg.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+
+ggplot(freq.table) +
+ aes(x = Var1, y = Freq, fill = Var2) +
+ geom_col() +
+ scale_fill_hue(direction = 1) +
+ theme_minimal()
+
+ggsave(paste0(output.dir, "Barplot_freq_of_subclone_per_treatment.pdf"))
+
 
 
 ```
@@ -778,7 +1202,7 @@ scCustomize::FeaturePlot_scCustom(CD45neg.seurat,
 
 dev.copy(pdf, paste0(output.dir, "UMAP_featureplot_CD45Neg_S_score.pdf"))
 dev.off()
-  
+
 # G2M-score 
 scCustomize::FeaturePlot_scCustom(CD45neg.seurat, 
                                   feature = "G2M.Score", 
@@ -789,7 +1213,7 @@ dev.off()
 
 # Dim plot split by phase
 scCustomize::DimPlot_scCustom(CD45neg.seurat, 
-                              group.by = "seurat_clusters",
+                              group.by = "cluster_anno",
                               split.by = "Phase",
                               label = TRUE,
                               reduction = "umap")
@@ -801,7 +1225,7 @@ dev.off()
 # Stacked VlnPlot
 scCustomize::Stacked_VlnPlot(CD45neg.seurat,
                              features = c("S.Score", "G2M.Score"), 
-                             group.by = "seurat_clusters")
+                             group.by = "cluster_anno")
 
 dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_cell_cycle.pdf"))
 dev.off()
@@ -815,7 +1239,7 @@ dev.off()
 
 
 # Frequency of phase per cluster
-dist.table <- table(CD45neg.seurat@meta.data$seurat_clusters, CD45neg.seurat@meta.data$Phase)
+dist.table <- table(CD45neg.seurat@meta.data$cluster_anno, CD45neg.seurat@meta.data$Phase)
 
 cluster.total <- rowSums(dist.table)
 
@@ -875,10 +1299,6 @@ ggplot(freq.table) +
 ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_treatment.pdf"))
 
 
-
-
-
-
 ```
 
 
@@ -908,7 +1328,7 @@ if(long.compute){
   
   
   # set idents
-  Idents(CD45neg.seurat) <- "seurat_clusters"
+  Idents(CD45neg.seurat) <- "cluster_anno"
   
   CD45Neg.de <- FindAllMarkers(CD45neg.seurat,
                                assay = "SCT",
@@ -935,6 +1355,14 @@ if(long.compute){
 ### Cluster-wise DEGs - heatmaps
 ```{r clusterwise_DEGs_heatmaps}
 
+# create output dir
+output.dir <- paste0("results/CD45Neg_cluster_wise_DEGs/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
 
 if(do.plot){
   # aggregate expression for heatmap visualisation
@@ -942,24 +1370,24 @@ if(do.plot){
   pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
                                         assays = "SCT",
                                         return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters"))
+                                        group.by = c("cluster_anno"))
   
   
   
   goi <- CD45Neg.de %>%
-    filter(p_val_adj < 0.05) %>%
-    group_by(cluster) %>%
-    top_n(10, avg_log2FC) %>%
-    pull(gene)
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    dplyr::pull(gene)
   
   
   DoHeatmap(pseudo.cd45neg, 
             features = goi, 
             draw.lines = FALSE, 
             raster = FALSE) + 
-  scico::scale_fill_scico(palette = "batlow", 
-                          direction = 1, 
-                          na.value = "white")
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
   
   dev.copy(pdf, paste0(output.dir, "Heatmap_top_10_DEGs_pseudobulk.pdf"))
   dev.off()
@@ -975,9 +1403,9 @@ if(do.plot){
     print(cluster.id[i])
     
     goi <- CD45Neg.de %>%
-      filter(p_val_adj < 0.05) %>%
-      filter(cluster == cluster.id[i]) %>%
-      top_n(50, avg_log2FC)
+      dplyr::filter(p_val_adj < 0.05) %>%
+      dplyr::filter(cluster == cluster.id[i]) %>%
+      dplyr::top_n(50, avg_log2FC)
     
     goi <- unique(goi)
     
@@ -986,9 +1414,9 @@ if(do.plot){
                 features = goi$gene, 
                 draw.lines = FALSE, 
                 raster = FALSE) + 
-  scico::scale_fill_scico(palette = "batlow", 
-                          direction = 1, 
-                          na.value = "white")
+        scico::scale_fill_scico(palette = "batlow", 
+                                direction = 1, 
+                                na.value = "white")
     )
     
     dev.copy(pdf, paste0(output.dir, "Heatmaptop_50_DEGs_pseudobulk_cluster_", cluster.id[i], ".pdf"))
@@ -1056,7 +1484,7 @@ for(i in seq_along(goi)){
 
 scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
                              features = goi,
-                             group.by = "seurat_clusters",
+                             group.by = "cluster_anno",
                              pt.size = 0)
 
 dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_melanocyte_genes.pdf"))
@@ -1071,7 +1499,7 @@ dev.off()
 pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
                                       assays = "SCT",
                                       return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
+                                      group.by = c("cluster_anno"))
 
 DoHeatmap(pseudo.cd45neg, 
           features = goi, 
@@ -1108,7 +1536,7 @@ if(!dir.exists(output.dir)){
 pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
                                       assays = "SCT",
                                       return.seurat = TRUE, 
-                                      group.by = c("seurat_clusters"))
+                                      group.by = c("cluster_anno"))
 
 
 ########################################
@@ -1165,7 +1593,7 @@ for(i in seq_along(names(goi))){
     print(
       scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
                                    features = goi[[i]],
-                                   group.by = "seurat_clusters",
+                                   group.by = "cluster_anno",
                                    pt.size = 0)
     )
     
@@ -1186,7 +1614,7 @@ for(i in seq_along(names(goi))){
       print(
         scCustomize::Stacked_VlnPlot(CD45neg.seurat, 
                                      features = split_list[[j]],
-                                     group.by = "seurat_clusters",
+                                     group.by = "cluster_anno",
                                      pt.size = 0)
       )
       
@@ -1228,13 +1656,13 @@ if(long.compute){
   
   
   # add annotation for treatment 
-  CD45neg.seurat@meta.data$Treatment_cluster <- paste0(CD45neg.seurat@meta.data$Treatment, "_", CD45neg.seurat@meta.data$seurat_clusters)
+  CD45neg.seurat@meta.data$Treatment_cluster <- paste0(CD45neg.seurat@meta.data$Treatment, "_", CD45neg.seurat@meta.data$cluster_anno)
   
   # set Idents
   Idents(CD45neg.seurat) <- "Treatment_cluster"
   
   
-  cluster.ids <- unique(CD45neg.seurat@meta.data$seurat_clusters)
+  cluster.ids <- unique(CD45neg.seurat@meta.data$cluster_anno)
   
   # create list to store output
   DEG.list <- list()
@@ -1277,6 +1705,15 @@ if(long.compute){
 ```{r treatmentwise_DEGs_volcano}
 
 # visualise treatment-wise DEGs as volcano plots
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_treatment_wise_DEGs/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
 
 
 if(do.plot){
@@ -1336,7 +1773,7 @@ if(long.compute){
   pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
                                         assays = "SCT",
                                         return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters"))
+                                        group.by = c("cluster_anno"))
   
   # Write to file
   temp.out <- GetAssayData(pseudo.cd45neg,
@@ -1349,7 +1786,7 @@ if(long.compute){
   pseudo.cd45neg <- AggregateExpression(CD45neg.seurat,
                                         assays = "SCT",
                                         return.seurat = TRUE, 
-                                        group.by = c("seurat_clusters", "Treatment"))
+                                        group.by = c("cluster_anno", "Treatment"))
   # write to file
   temp.out <- GetAssayData(pseudo.cd45neg,
                            layer = "data",
