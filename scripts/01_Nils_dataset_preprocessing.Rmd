@@ -100,7 +100,6 @@ gc() # Free memory
 # pipeline variables
 long.compute <- TRUE
 do.plot <- TRUE
-quick.load <- FALSE
 
 # Establish working directory
 library("rstudioapi")
@@ -127,15 +126,16 @@ source("scripts/Setup.R", local = knitr::knit_global())
 #remotes::install_github("satijalab/azimuth", "seurat5", quiet = TRUE)
 #remotes::install_github("satijalab/seurat-wrappers", "seurat5", quiet = TRUE)
 
-# Nebulosa / scCustomize has issues with ggplot2 v3.5.0, therefore ensure v3.4.4 is installed
-#devtools::install_version("ggplot2", version = '3.4.4')
-# but note for clusttree, require updated ggplot2 >= 3.5
+
+# function found in Setup.R script
+ggplot2_switch_version(desired_version = "3.4.4")
+
+
 
 library("Seurat")
 library("SeuratObject")
 library("SeuratData")
 library("SeuratWrappers")
-library("Azimuth")
 library("dplyr")
 library("scCustomize")
 
@@ -174,12 +174,6 @@ if(parallelization){
 }
 
 
-
-if(quick.load){
-  
-  Nils.seurat <- list(CD45Pos = LoadSeuratRds("saves/Nils_seurat_CD45Pos.rds"), CD45Neg = LoadSeuratRds("saves/Nils_seurat_CD45Neg.rds"))
-  
-}
 ```
 
 
@@ -213,9 +207,12 @@ if(long.compute){
   
   # list all directories in data folder
   samples <- list.dirs(path = "data", recursive = FALSE)
-  
+  # keep only _outs dirs 
+  samples <- grep(".*_outs", samples, value = T)
   
   for(i in seq_along(samples)){
+    
+    
     
     ##################
     # define input path
@@ -229,42 +226,55 @@ if(long.compute){
     sample.id <- gsub("data/", "", samples[i])
     sample.id <- gsub("_outs", "", sample.id)
     
-    ##################
-    # load data 
-    ##################
-    # filtered and raw matrix as well as cluster info from cellranger analysis
-    sc.temp <- SoupX::load10X(input.path)
     
-    ##################
-    # Estimate rho
-    ##################
-    # note default params are optimised for fresh (not nuclear) single cell experiments 
-    # if processing nuclear scRNAseq, consider adjusting prior Rho default estimates
+    # Only proceed if output dir does not exist
+    output.dir.name <- paste0("data/", sample.id, "_strainedCounts")
     
-    sc.temp <- autoEstCont(sc.temp)
-    
-    dev.copy(pdf, paste0(output.dir, sample.id, "_Rho_estimation.pdf"))
-    dev.off()
-    
-    ##################
-    # Clean the data
-    ##################
-    sc.out <- adjustCounts(sc.temp)
-    
-    ##################
-    # save data to file
-    ##################
-    DropletUtils:::write10xCounts(paste0("data/", sample.id, "_strainedCounts"), sc.out)
-    
-    ##################
-    # clean environment 
-    ##################
-    rm(list = c("sc.temp", "sc.out"))
-    
+    if(!dir.exists(output.dir.name)){
+      print(paste0("Directory ", output.dir.name, " does not exists, preceeding with this sample"))
+      
+      ##################
+      # load data 
+      ##################
+      # filtered and raw matrix as well as cluster info from cellranger analysis
+      sc.temp <- SoupX::load10X(input.path)
+      
+      ##################
+      # Estimate rho
+      ##################
+      # note default params are optimised for fresh (not nuclear) single cell experiments 
+      # if processing nuclear scRNAseq, consider adjusting prior Rho default estimates
+      
+      sc.temp <- autoEstCont(sc.temp)
+      
+      dev.copy(pdf, paste0(output.dir, sample.id, "_Rho_estimation.pdf"))
+      dev.off()
+      
+      ##################
+      # Clean the data
+      ##################
+      sc.out <- adjustCounts(sc.temp)
+      
+      ##################
+      # save data to file
+      ##################
+      DropletUtils:::write10xCounts(paste0(output.dir.name), sc.out)
+      
+      ##################
+      # clean environment 
+      ##################
+      rm(list = c("sc.temp", "sc.out"))
+      
+    }else{
+      print(paste0("Directory ", output.dir.name, " already exists, not recomputing this sample"))
+      
+    }
   }
   
-  
-  
+}
+
+
+# Misc info 
   # various tools to visualise and inspect ambient RNA removal and detection
   # plotMarkerDistribution(sc.temp)
   # 
@@ -279,11 +289,6 @@ if(long.compute){
   # 
   # plotChangeMap(sc.temp, sc.out, "Il1b")
   # 
-  
-  
-}
-
-
 ```
 
 
@@ -734,11 +739,11 @@ if(long.compute){
   
   table(Nils.seurat$CD45Pos@meta.data$Treatment) # 17351 PDS and 17206 Vehicle
   table(Nils.seurat$CD45Pos@meta.data$Time) # 18,032 Day 4 and 16,525 Day 9
-    table(Nils.seurat$CD45Pos@meta.data$Time, Nils.seurat$CD45Pos@meta.data$Treatment)
-        
-#        PDS Vehicle
-#  Day4 8082    9950
- # Day9 9269    7256
+  table(Nils.seurat$CD45Pos@meta.data$Time, Nils.seurat$CD45Pos@meta.data$Treatment)
+  
+  #        PDS Vehicle
+  #  Day4 8082    9950
+  # Day9 9269    7256
   
 }
 
@@ -873,7 +878,7 @@ if(long.compute){
     for(j in seq_along(names(Nils.seurat))){
       
       vars.plot <- c("Treatment", "SampleID", "seurat_clusters", "Time")
-
+      
       for(i in seq_along(vars.plot)){
         
         
@@ -906,26 +911,7 @@ if(long.compute){
 ```
 
 
-### Save seurat object
-```{r save_seurat_object}
-
-if(long.compute){
-  
-  library("SeuratObject")
-  
-  SaveSeuratRds(Nils.seurat$CD45Pos, 
-                file = "saves/Nils_seurat_CD45Pos_integrated.rds")
-  
-  SaveSeuratRds(Nils.seurat$CD45Neg, 
-                file = "saves/Nils_seurat_CD45Neg_integrated.rds")
-  
-}
-
-```
-
-
 ## Cluster identification and UMAP optimisation {.tabset}
-
 
 ### Cluster optimisation
 ```{r Cluster_optimisation}
@@ -990,6 +976,9 @@ if(long.compute){
   
   # load package
   # install.packages("clustree")
+  
+  ggplot2_switch_version(desired_version = "3.5")
+
   library(clustree) # clusttree needs to be loaded, error occurs if just call function from namespace
   
   head(Nils.seurat[[2]][[]])
@@ -1007,7 +996,9 @@ if(long.compute){
     
   }
   
-  
+  # switch back to 3.4.4
+    ggplot2_switch_version(desired_version = "3.4.4")
+
   ###############################
   # Visualise clusters on UMAP
   ###############################
@@ -1175,7 +1166,7 @@ if(long.compute){
                   group.by = "seurat_clusters") +
     NoLegend()
   
-   Seurat::DimPlot(object = Nils.seurat$CD45Pos, 
+  Seurat::DimPlot(object = Nils.seurat$CD45Pos, 
                   reduction = "umap", 
                   label = TRUE, 
                   label.size = 4, 
@@ -1193,301 +1184,14 @@ if(long.compute){
   library("SeuratObject")
   
   SaveSeuratRds(Nils.seurat$CD45Pos, 
-                file = "saves/Nils_seurat_CD45Pos.rds")
+                file = "saves/Preprocessed_CD45Pos.rds")
   
   SaveSeuratRds(Nils.seurat$CD45Neg, 
-                file = "saves/Nils_seurat_CD45Neg.rds")
+                file = "saves/Preprocessed_CD45Neg.rds")
   
 }
 
 ```
-
-
-
-
-### Archive #####
-
-
-
-
-## DEG between treatment and vehicle {.tabset}
-# write to iterate over clusters
-
-### DEG analysis CD45Pos dataset treatment vs vehicle
-```{r DEG_CD45Pos_treatment}
-
-# create output dir
-output.dir <- paste0("results/CD45Pos_DEG_analysis_treatment_vs_vehicle/")
-
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, 
-             recursive = T)
-  
-}
-
-
-
-Nils.seurat$CD45Pos <- PrepSCTFindMarkers(Nils.seurat$CD45Pos)
-
-# set assay
-DefaultAssay(Nils.seurat$CD45Pos) <- "SCT"
-
-
-# set idents
-Idents(Nils.seurat$CD45Pos) <- "seurat_clusters"
-
-Nils.seurat$CD45Pos@meta.data$Treatment_cluster <- paste0(Nils.seurat$CD45Pos@meta.data$Treatment, "_", Nils.seurat$CD45Pos@meta.data$seurat_clusters)
-Idents(Nils.seurat$CD45Pos) <- "Treatment_cluster"
-unique(Idents(Nils.seurat$CD45Pos))
-
-
-
-Nils.seurat$CD45Pos@meta.data$Treatment_anno <- paste0(Nils.seurat$CD45Pos@meta.data$Treatment, "_", Nils.seurat$CD45Pos@meta.data$predicted.celltype.l2)
-Idents(Nils.seurat$CD45Pos) <- "Treatment_anno"
-unique(Idents(Nils.seurat$CD45Pos))
-
-
-
-
-clust.id <- "CD14 Mono"
-deg.list <- FindMarkers(Nils.seurat$CD45Pos,
-                        ident.1 = paste0("PDS_", clust.id),
-                        ident.2 = paste0("Vehicle_", clust.id),
-                        assay = "SCT",
-                        only.pos = TRUE, 
-                        verbose = TRUE)
-
-
-
-deg.list %>%
-  filter(p_val_adj < 0.05)
-
-
-
-
-
-
-
-
-# save to file 
-#write.csv(CD45Pos.de, paste0(output.dir, "CD45Pos_DEGs.csv"))
-
-
-# aggregate expression for heatmap visualisation
-
-pseudo.cd45pos <- AggregateExpression(Nils.seurat$CD45Pos,
-                                      assays = "SCT",
-                                      return.seurat = TRUE, 
-                                      group.by = c("Treatment_anno"))
-
-
-
-goi <- deg.list %>%
-  filter(p_val_adj < 0.05) %>%
-  top_n(20, avg_log2FC) %>%
-  rownames()
-Idents(pseudo.cd45pos)
-pseudo.cd45pos <- subset(pseudo.cd45pos, idents = c("PDS-CD14 Mono", "Vehicle-CD14 Mono"))
-pseudo.cd45pos <- ScaleData(pseudo.cd45pos)
-
-DoHeatmap(pseudo.cd45pos, 
-          features = goi, 
-          draw.lines = FALSE, 
-          raster = FALSE) + NoLegend()
-
-#dev.copy(pdf, paste0(output.dir, "Heatmaptop_10_DEGs_pseudobulk.pdf"))
-#dev.off()
-
-VlnPlot_scCustom(Nils.seurat$CD45Pos,
-                 features = c("ISG20"), 
-                 group.by = "Treatment_anno", 
-                 idents = c("PDS_CD14 Mono", "Vehicle_CD14 Mono"))
-
-
-
-
-```
-
-
-
-
-
-
-
-
-### Temp
-# read bam files and inspect bam alignment to OVAL
-```{r}
-
-
-# 
-#  setwd("/Users/ieo/Documents/Sequence_alignment/scRNAseq/Nils_10x_B16_ex_vivo_2024/SI-TT-E4_plus_OVAL_forward/outs")
-#  
-#  sequence.data <- Seurat::Read10X(data.dir = paste0("./raw_feature_bc_matrix"))
-#  sequence.data
-#  logic.var <- grepl("OVAL", rownames(sequence.data))
-#  rownames(sequence.data)[logic.var]
-#  x <- sequence.data[logic.var, ]
-#  sum(x)
-#  
-# # 
-#  
-#  
-#  seurat.temp <- CreateSeuratObject(counts = sequence.data,
-#                                    min.cells = 0,
-#                                    min.features = 0,
-#                                    project = "test")
-#      
-# 
-#grep("OVAL", rownames(seurat.temp), value = T)
-
-#logic.var <- grepl("OVAL", rownames(seurat.temp))
-#rownames(seurat.temp)[logic.var]
-
-# seurat.temp@assays$RNA@layers$counts[logic.var, ]
-
-
-#VlnPlot_scCustom(seurat.temp, "OVAL")
-
-
-
-
-# library(Rsamtools)
-# 
-# # Path to BAM file
-# bam_file <- "possorted_genome_bam.bam"
-# 
-# # Load BAM file and index
-# bam <- Rsamtools::BamFile(bam_file)
-# 
-# seqinfo(bam)
-# 
-# 
-# which <- GRanges(c(
-#     "OVAL:1-1875"
-# ))
-# ## equivalent:
-# ## GRanges(
-# ##     seqnames = c("seq1", "seq2", "seq2"),
-# ##     ranges = IRanges(
-# ##         start = c(1000, 100, 1000),
-# ##         end = c(2000, 1000, 2000)
-# ##     )
-# ## )
-# what <- c("qname", "rname", "strand", "pos", "qwidth", "mapq", "qual", "cigar", "flag", "seq")
-# param <- ScanBamParam(which=which, what=what)
-# 
-# aln <- scanBam(bam, param=param)
-# aln
-# count.vals <- countBam(bam, param=param)
-# count.vals
-# 
-# unique(aln$`OVAL:1-1875`$flag)
-# 
-# table(aln$`OVAL:1-1875`$pos)
-# 
-# #quickBamFlagSummary(bam)
-# 
-# 
-# 
-# 
-# 
-# 
-# #install.packages("rhdf5")
-# library(rhdf5)
-# 
-# 
-# # Specify the path to your HDF5 file
-# hdf5_file <- "molecule_info.h5"
-# 
-# # Open the HDF5 file
-# hdf5_data <- H5Fopen(hdf5_file)
-# 
-# # Read a dataset from the HDF5 file
-# dataset_name <- "features"
-# dataset <- h5read(hdf5_data, dataset_name)
-# 
-# dataset$name[dataset$name == "OVAL"]
-# 
-# # Close the HDF5 file when done
-# H5Fclose(hdf5_data)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# # Specify the path to your HDF5 file
-# hdf5_file <- "raw_feature_bc_matrix.h5"
-# 
-# # Open the HDF5 file
-# hdf5_data <- H5Fopen(hdf5_file)
-# 
-# # Read a dataset from the HDF5 file
-# dataset_name <- "matrix"
-# dataset <- h5read(hdf5_data, dataset_name)
-# dataset
-# dataset$data[dataset$features$name == "OVAL"]
-# 
-# 
-# # Close the HDF5 file when done
-# H5Fclose(hdf5_data)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# #aln <- scanBam(bam)
-# 
-# length(aln)
-# class(aln)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# Rsamtools::getSeq(bam)
-# 
-# 
-# # Extract alignments overlapping the gene
-# gene_alignments <- subset(bam, which(  # Use 'subset' to filter alignments
-#   seqnames(bam) == "chromosome_name" &  # Replace with chromosome name
-#   (start(bam) >= gene_coordinates[1] & end(bam) <= gene_coordinates[2])  # Filter by gene coordinates
-# ))
-
-
-```
-
-
-### Doublet detection and removal \\ currently not done as packages are broken or not updated for seuratV5 assay
-```{r doublet_detection_and_removal}
-
-
-# would like to use DoubletFinder as I think this is a more elegant package for doublet detection 
-# however, seems DoubletFinder has not been updated to work with SeuratV5 and may have additional bugs preventing use by simply converting object to V3
-
-# scDblFinder also has issues - error = "as_cholmod_sparse" not provided by package "Matrix" 
-# seems to be an issue with Matrix and irlba packages. 
-# tried work arounds suggested on github pages, which essentially remove these packages and reinstall 
-# however error persists. 
-
-# therefore for now, dont identify doublets  
-
-
-
-```
-
 
 
 
