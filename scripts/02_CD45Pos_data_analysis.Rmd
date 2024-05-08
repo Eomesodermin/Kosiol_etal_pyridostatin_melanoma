@@ -536,62 +536,62 @@ if(long.compute){
   
   
   # little code to count up how many distinct cell types there are 
-CD45pos.seurat@meta.data %>%
+  CD45pos.seurat@meta.data %>%
     dplyr::select(c(cluster_anno, SingleR_fine)) %>%
-         # Extract cell_type from cluster_anno
-     mutate(cell_type = str_extract(cluster_anno, "^[^_]+")) %>%
-     # Group by cell_type
-     group_by(cell_type) %>%
-     # Calculate the number of unique annotations for each cell_type and rank them
+    # Extract cell_type from cluster_anno
+    mutate(cell_type = str_extract(cluster_anno, "^[^_]+")) %>%
+    # Group by cell_type
+    group_by(cell_type) %>%
+    # Calculate the number of unique annotations for each cell_type and rank them
     mutate(
-         # Calculate the count of unique cluster_anno
-         unique_count = n_distinct(cluster_anno) ) %>%
+      # Calculate the count of unique cluster_anno
+      unique_count = n_distinct(cluster_anno) ) %>%
     ungroup() %>%
     distinct(cluster_anno, .keep_all = TRUE)
-
-
-
-CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
-  # Extract cell_type from cluster_anno
-  mutate(cell_type = str_extract(cluster_anno, "^[^_]+")) %>%
-  mutate(cluster_anno_new = case_when(
-    cluster_anno == "Macrophages_1" ~ "Macrophages_1", 
-    cluster_anno == "Macrophages_9" ~ "Macrophages_2", 
-    
-    cluster_anno == "Bcells_8" ~ "B_cells", 
-    
-    cluster_anno == "DC_15" ~ "pDC", 
-    cluster_anno == "DC_14" ~ "DC_1", 
-    cluster_anno == "DC_12" ~ "DC_2",
-    
-    cluster_anno == "Monocytes_4" ~ "Monocytes_1", 
-    cluster_anno == "Monocytes_5" ~ "Monocytes_2", 
-    cluster_anno == "Monocytes_7" ~ "Monocytes_3", 
-    
-    cluster_anno == "Macrophages_1" ~ "Macrophages_1", 
-    cluster_anno == "Macrophages_9" ~ "Macrophages_2", 
-    
-    cluster_anno == "Neutrophils_3" ~ "Neutrophils_1", 
-    cluster_anno == "Neutrophils_6" ~ "Neutrophils_2", 
-    
-    cluster_anno == "Stromalcells_16" ~ "Stromal_cells", 
-    
-    cluster_anno == "NKcells_2" ~ "NK_cells", 
-    
-    cluster_anno == "Basophils_17" ~ "Basophils", 
-    
-    cluster_anno == "Tcells_0" ~ "T_cells_1", 
-    cluster_anno == "Tcells_10" ~ "T_cells_2", 
-    cluster_anno == "Tcells_13" ~ "T_cells_3", 
-    cluster_anno == "Tcells_11" ~ "Tregs", 
-    TRUE ~ "ERROR")) %>%
-  mutate(cluster_anno = cluster_anno_new) %>%
-  select(-cluster_anno_new)
-   
+  
+  
+  
+  CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
+    # Extract cell_type from cluster_anno
+    mutate(cell_type = str_extract(cluster_anno, "^[^_]+")) %>%
+    mutate(cluster_anno_new = case_when(
+      cluster_anno == "Macrophages_1" ~ "Macrophages_1", 
+      cluster_anno == "Macrophages_9" ~ "Macrophages_2", 
+      
+      cluster_anno == "Bcells_8" ~ "B_cells", 
+      
+      cluster_anno == "DC_15" ~ "pDC", 
+      cluster_anno == "DC_14" ~ "DC_1", 
+      cluster_anno == "DC_12" ~ "DC_2",
+      
+      cluster_anno == "Monocytes_4" ~ "Monocytes_1", 
+      cluster_anno == "Monocytes_5" ~ "Monocytes_2", 
+      cluster_anno == "Monocytes_7" ~ "Monocytes_3", 
+      
+      cluster_anno == "Macrophages_1" ~ "Macrophages_1", 
+      cluster_anno == "Macrophages_9" ~ "Macrophages_2", 
+      
+      cluster_anno == "Neutrophils_3" ~ "Neutrophils_1", 
+      cluster_anno == "Neutrophils_6" ~ "Neutrophils_2", 
+      
+      cluster_anno == "Stromalcells_16" ~ "Stromal_cells", 
+      
+      cluster_anno == "NKcells_2" ~ "NK_cells", 
+      
+      cluster_anno == "Basophils_17" ~ "Basophils", 
+      
+      cluster_anno == "Tcells_0" ~ "T_cells_1", 
+      cluster_anno == "Tcells_10" ~ "T_cells_2", 
+      cluster_anno == "Tcells_13" ~ "T_cells_3", 
+      cluster_anno == "Tcells_11" ~ "Tregs", 
+      TRUE ~ "ERROR")) %>%
+    mutate(cluster_anno = cluster_anno_new) %>%
+    select(-cluster_anno_new)
+  
   
   unique(CD45pos.seurat@meta.data$cluster_anno)
-    unique(CD45pos.seurat@meta.data$SingleR_fine)
-
+  unique(CD45pos.seurat@meta.data$SingleR_fine)
+  
   
   # clean up object, remove unnecessary columns keep only what is needed
   CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
@@ -1023,7 +1023,6 @@ ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_sampleID.pdf"))
 ```
 
 
-
 ## DEG analysis {.tabset}
 
 ### Cluster-wise DEGs - calculate
@@ -1149,10 +1148,6 @@ if(do.plot){
 }
 
 ```
-
-
-
-
 
 
 ### Treatment-wise DEGs - calculate
@@ -1297,7 +1292,7 @@ if(!dir.exists(output.dir)){
 if(long.compute){
   
   DefaultAssay(CD45pos.seurat) <- "SCT"
-
+  
   # Aggregate expression by cluster 
   pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
                                         assays = "SCT",
@@ -1312,8 +1307,8 @@ if(long.compute){
   write.csv(temp.out, paste0(output.dir, "CD45pos_Aggregate_SCT_data_by_cluster.csv"))
   
   # Aggregate expression by cluster and SampleID
-    DefaultAssay(CD45pos.seurat) <- "SCT"
-
+  DefaultAssay(CD45pos.seurat) <- "SCT"
+  
   pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
                                         assays = "SCT",
                                         return.seurat = TRUE, 
@@ -1334,6 +1329,20 @@ if(long.compute){
 
 
 ```
+
+
+
+
+# TO DO
+# for CD45Neg dataset
+# group Tumor together, DEG between vehicle and treatment 
+
+# for CD45Pos dataset
+# split by time 
+# day 4 - group monocytes, macrophage, neutrophils etc, DEG between vehicle and treatment 
+# day 9 group t-cells, group neutrophils, degs between vehcile treatment, 
+# neutrophil treatment day 9 vs day 4 neutrophils 
+# zoom in on t-cells, can find cytotoxic cd4s?
 
 
 ## RQ1: Which CD45Pos clusters express chemokines or cytokines {.tabset}
@@ -1451,35 +1460,14 @@ for(i in seq_along(names(goi))){
 ```
 
 
+## RQ2: What is the difference between macrophage clusters and between neutrophil clusters {.tabset}
+# PDS should induce DAMPs that activate macrophage and neutrophil populations
 
-
-# i am up to here 
-
-
-# re-write below based on analysis layout in cd45neg dataset 
-
-
-# TO do for Nils dataset
-# CD45Neg dataset 
-# cytokine chemokine across treatment from tumor cells
-# apoptosis across treatment in tumor cells - PDS should induce apoptosis 
-
-# CD45Pos dataset
-# Time 1 - activation, myeloid, neutrophil compartments 
-# time 1 - myeloid M1 vs M2, neutrophil, antigen presentation 
-# time 2 - tcell, activation, exhasution, 
-
-
-# i am up to this chunk 
-
-## RQ2: Are there differences between macrophages and DCs between PDS and Vehicle (because there are DAMPs that should activate them) {.tabset}
-
-
-```{r treatment_differences_in_DCs_Macrophages}
+```{r Macrophage_neutrophil_cluster_differences}
 
 
 # create output dir
-output.dir <- paste0("results/RQ2_Macrophage_DC_treatment_differences/")
+output.dir <- paste0("results/CD45Pos_Day_4_Neutrophil_Macrophage_cluster_differences/")
 
 if(!dir.exists(output.dir)){
   dir.create(output.dir, 
@@ -1488,12 +1476,14 @@ if(!dir.exists(output.dir)){
 }
 
 
-# i am up to here
-# to do this bit
+
+# Myeloid populations at early timepoint are expected to play a large role
+# investigate myeloid populations at early timepoint between PDS and Vehicle 
 
 
-
-
+# reduce dataset to just day 4 timepoint 
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$Time
+day4.seurat <- subset(CD45pos.seurat, idents = "Day4")
 
 
 
@@ -1502,7 +1492,7 @@ if(!dir.exists(output.dir)){
 
 # Firstly are there abundance differences or polarisations torwards particular subsets of marophages or DCs between untreated and treated 
 
-dist.table <- table(CD45pos.seurat@meta.data$cluster_anno, CD45pos.seurat@meta.data$Treatment)
+dist.table <- table(day4.seurat@meta.data$cluster_anno, day4.seurat@meta.data$Treatment)
 
 treatment.total <- colSums(dist.table)
 
@@ -1527,24 +1517,969 @@ ggplot(freq.table) +
   theme_minimal() +
   facet_wrap(vars(Var1))
 
-dev.copy(pdf, paste0(output.dir, "Barplot_freq_of_clusters_as_percentage_of_treatment.pdf"))
+dev.copy(pdf, paste0(output.dir, "Barplot_freq_of_clusters_as_percentage_of_treatment_day4_only.pdf"))
 dev.off()      
+
+
+# note: 
+# more B cells, DC_1, DC_2, and T_cells_1, and T_cells_2 in vehicle 
+# major increase in Neutrophils_1 and Neutrophils_2 in PDS
+# increase in Macrophages_2 but not Macrophages_1 in PDS
+
+# downsample for accurate representation of clusters
+
+table(day4.seurat@meta.data$SampleID) # 9,950 vehicle and 8,082 PDS
+# reduce to 6,000 cells each 
+Idents(day4.seurat) <- day4.seurat@meta.data$SampleID
+temp.seurat <- subset(day4.seurat, downsample = 6000)
+
 
 
 
 # plot umaps split by treatment 
-scCustomize::DimPlot_scCustom(CD45pos.seurat, 
+scCustomize::DimPlot_scCustom(temp.seurat, 
                               group.by = "cluster_anno", 
                               split.by = "Treatment", 
                               label = TRUE,
+                              pt.size = 1,
                               reduction = "umap")
 
-dev.copy(pdf, paste0(output.dir, "UMAP_split_by_treatment.pdf"))
+dev.copy(pdf, paste0(output.dir, "UMAP_split_by_treatment_downsampled.pdf"))
 dev.off()
 
 
+rm(temp.seurat)
+
+# DEG between myeloid populations 
+
+# how are Neutrophil_1 and Neutrophil_2 populations different 
 
 
+
+if(long.compute){
+  
+  
+  day4.seurat <- PrepSCTFindMarkers(day4.seurat)
+  
+  # set assay
+  DefaultAssay(day4.seurat) <- "SCT"
+  
+  
+  
+  # set Idents
+  Idents(day4.seurat) <- "cluster_anno"
+  
+  
+  
+  # Macrophage 1 vs 2
+  D4.macrophage.de <- FindMarkers(day4.seurat,
+                                  assay = "SCT",
+                                  ident.1 = "Macrophages_1",
+                                  ident.2 = "Macrophages_2",
+                                  only.pos = FALSE, 
+                                  recorrect_umi = FALSE,
+                                  verbose = TRUE)
+  
+  
+  # save to file 
+  write.csv(D4.macrophage.de, paste0(output.dir, "Day_4_CD45Pos_DEGs_Macrophages_1_vs_Macrophages_2.csv"))
+  
+  
+  # Neutrophils_1 vs 2
+  D4.neutrophil.de <- FindMarkers(day4.seurat,
+                                  assay = "SCT",
+                                  ident.1 = "Neutrophils_1",
+                                  ident.2 = "Neutrophils_2",
+                                  only.pos = FALSE, 
+                                  recorrect_umi = FALSE,
+                                  verbose = TRUE)
+  
+  
+  # save to file 
+  write.csv(D4.neutrophil.de, paste0(output.dir, "Day_4_CD45Pos_DEGs_Neutrophils_1_vs_Neutrohils_2.csv"))
+  
+}
+
+
+if(do.plot){
+  
+  #####################
+  # heatmaps of top DEGs
+  #####################
+  
+  
+  # Neutrophils 1 vs 2
+  Idents(day4.seurat) <- day4.seurat@meta.data$cluster_anno
+  
+  
+  temp.seurat <- subset(day4.seurat, idents = c("Neutrophils_1", "Neutrophils_2"))
+  
+  pseudo.D4.cd45pos <- AggregateExpression(temp.seurat,
+                                           assays = "SCT",
+                                           return.seurat = TRUE, 
+                                           group.by = c("cluster_anno"))
+  
+  
+  # Extract top fold change DEGs 
+  
+  goi <- D4.neutrophil.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(abs(avg_log2FC) > 2) %>%
+    dplyr::arrange(desc(avg_log2FC)) %>%
+    rownames()
+  
+  
+  # plot heatmap
+  DoHeatmap(pseudo.D4.cd45pos, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Day4_Heatmap_top_DEGs_logfold_2_neutrophils_1_vs_2.pdf"))
+  dev.off()
+  
+  
+  # extract just top 10 up and down degs
+  goi.up <- D4.neutrophil.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    rownames()
+  
+  goi.dn <- D4.neutrophil.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(-10, avg_log2FC) %>%
+    rownames()
+  
+  goi <- unique(c(goi.up, goi.dn))
+  
+  DoHeatmap(pseudo.D4.cd45pos, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Day4_Heatmap_top_DEGs_10_up_down_neutrophils_1_vs_2.pdf"))
+  dev.off()
+  
+  
+  
+  
+  ##################
+  # Macrophages 1 vs 2
+  ##################
+  Idents(day4.seurat) <- day4.seurat@meta.data$cluster_anno
+  
+  
+  temp.seurat <- subset(day4.seurat, idents = c("Macrophages_1", "Macrophages_2"))
+  
+  pseudo.D4.cd45pos <- AggregateExpression(temp.seurat,
+                                           assays = "SCT",
+                                           return.seurat = TRUE, 
+                                           group.by = c("cluster_anno"))
+  
+  
+  # Extract top fold change DEGs 
+  
+  goi <- D4.macrophage.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(abs(avg_log2FC) > 2) %>%
+    dplyr::arrange(desc(avg_log2FC)) %>%
+    rownames()
+  
+  
+  # plot heatmap
+  DoHeatmap(pseudo.D4.cd45pos, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Day4_Heatmap_top_DEGs_logfold_2_macrophage_1_vs_2.pdf"))
+  dev.off()
+  
+  
+  # extract just top 10 up and down degs
+  goi.up <- D4.macrophage.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    rownames()
+  
+  goi.dn <- D4.macrophage.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(-10, avg_log2FC) %>%
+    rownames()
+  
+  goi <- unique(c(goi.up, goi.dn))
+  
+  DoHeatmap(pseudo.D4.cd45pos, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Day4_Heatmap_top_DEGs_10_up_down_macrophage_1_vs_2.pdf"))
+  dev.off()
+  
+  
+}
+
+####################################
+# perform gene ontology analysis 
+####################################
+
+if(do.plot){
+  
+  # load packages
+  #install.packages("enrichR")
+  library("enrichR")
+  #install.packages("SCpubr")
+  library("SCpubr")
+  
+  # set serach to human genes
+  enrichR::setEnrichrSite(site = "Enrichr")
+  
+  dbs <- enrichR::listEnrichrDbs()
+  dbs <- sort(dbs$libraryName)
+  
+  # Choose the dataset to query against.
+  dbs_use <- c("GO_Biological_Process_2023", "GO_Cellular_Component_2023", "GO_Molecular_Function_2023", "KEGG_2021_Human", "WikiPathway_2023_Human")
+  
+  
+  
+  ##################################################
+  # Perform GO for neutrophil_1 vs neutrophil_2 
+  ##################################################
+  
+  title.var <- "Neutrophils"
+  
+  # filter DEGs for sig up genes 
+  Neutrophils_1_sig <- D4.neutrophil.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC > 1)
+  
+  # filter DEGs for sig down genes 
+  Neutrophils_2_sig <- D4.neutrophil.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC < -1)
+  
+  
+  ########################################################################
+  # Perform enrichment for genes upregulated in Neutrophils_1
+  ########################################################################
+  
+  # List of genes to use as input.
+  neutrophil.1.genes <- unique(rownames(Neutrophils_1_sig))
+  
+  # Retrieve the enriched terms.
+  up.enriched.terms <- enrichR::enrichr(neutrophil.1.genes, dbs_use)
+  
+  # Plot enriched terms 
+  bp.1 <- plotEnrich(up.enriched.terms$GO_Biological_Process_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched BPs"))
+  cc.1 <- plotEnrich(up.enriched.terms$GO_Cellular_Component_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched CCs"))
+  mf.1 <- plotEnrich(up.enriched.terms$GO_Molecular_Function_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched MFs"))
+  kegg.1 <- plotEnrich(up.enriched.terms$KEGG_2021_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched KEGG"))
+  wiki.1 <- plotEnrich(up.enriched.terms$WikiPathway_2023_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched Wiki paths"))
+  
+  
+  ############################################################
+  # Perform enrichment analysis for Downregulated genes 
+  ############################################################
+  
+  
+  # List of genes to use as input.
+  neutrophil.2.genes <- unique(rownames(Neutrophils_2_sig))
+  
+  # Retrieve the enriched terms.
+  dn.enriched.terms <- enrichR::enrichr(neutrophil.2.genes, dbs_use)
+  
+  # Plot enriched terms 
+  
+  bp.2 <- plotEnrich(dn.enriched.terms$GO_Biological_Process_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched BPs"))
+  cc.2 <- plotEnrich(dn.enriched.terms$GO_Cellular_Component_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched CCs"))
+  mf.2 <- plotEnrich(dn.enriched.terms$GO_Molecular_Function_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched MFs"))
+  kegg.2 <- plotEnrich(dn.enriched.terms$KEGG_2021_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched KEGG"))
+  wiki.2 <- plotEnrich(dn.enriched.terms$WikiPathway_2023_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched Wiki paths"))
+  
+  
+  
+  print(bp.1|bp.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_BP.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  print(cc.1|cc.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_CC.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(mf.1|mf.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_MF.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(kegg.1|kegg.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_KEGG.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(wiki.1|wiki.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_WIKI.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  
+  
+  ##################################################
+  # Perform GO for Macrophages_1 vs Macrophages_2 
+  ##################################################
+  
+  title.var <- "Macrophages"
+  
+  # filter DEGs for sig up genes 
+  Macrophages_1_sig <- D4.macrophage.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC > 1)
+  
+  # filter DEGs for sig down genes 
+  Macrophages_2_sig <- D4.macrophage.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(avg_log2FC < -1)
+  
+  
+  ########################################################################
+  # Perform enrichment for genes upregulated in Neutrophils_1
+  ########################################################################
+  
+  # List of genes to use as input.
+  macrophages.1.genes <- unique(rownames(Macrophages_1_sig))
+  
+  # Retrieve the enriched terms.
+  up.enriched.terms <- enrichR::enrichr(macrophages.1.genes, dbs_use)
+  
+  # Plot enriched terms 
+  bp.1 <- plotEnrich(up.enriched.terms$GO_Biological_Process_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched BPs"))
+  cc.1 <- plotEnrich(up.enriched.terms$GO_Cellular_Component_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched CCs"))
+  mf.1 <- plotEnrich(up.enriched.terms$GO_Molecular_Function_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched MFs"))
+  kegg.1 <- plotEnrich(up.enriched.terms$KEGG_2021_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched KEGG"))
+  wiki.1 <- plotEnrich(up.enriched.terms$WikiPathway_2023_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_1 enriched Wiki paths"))
+  
+  
+  ############################################################
+  # Perform enrichment analysis for Downregulated genes 
+  ############################################################
+  
+  
+  # List of genes to use as input.
+  macrophages.2.genes <- unique(rownames(Macrophages_2_sig))
+  
+  # Retrieve the enriched terms.
+  dn.enriched.terms <- enrichR::enrichr(macrophages.2.genes, dbs_use)
+  
+  # Plot enriched terms 
+  
+  bp.2 <- plotEnrich(dn.enriched.terms$GO_Biological_Process_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched BPs"))
+  cc.2 <- plotEnrich(dn.enriched.terms$GO_Cellular_Component_2023, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched CCs"))
+  mf.2 <- plotEnrich(dn.enriched.terms$GO_Molecular_Function_2023, showTerms = 20, numChar = 50, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched MFs"))
+  kegg.2 <- plotEnrich(dn.enriched.terms$KEGG_2021_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched KEGG"))
+  wiki.2 <- plotEnrich(dn.enriched.terms$WikiPathway_2023_Human, showTerms = 20, numChar = 40, y = "Count", orderBy = "P.value", title = paste0(title.var, "_2 enriched Wiki paths"))
+  
+  
+  
+  print(bp.1|bp.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_BP.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  print(cc.1|cc.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_CC.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(mf.1|mf.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_GO_MF.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(kegg.1|kegg.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_KEGG.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+  print(wiki.1|wiki.2)
+  ggsave(filename = paste0(output.dir, "Day_4_", title.var, "_WIKI.pdf"),
+         width = 20, 
+         height = 20, 
+         units = "in",
+         device = "pdf")
+  
+  
+}
+
+```
+
+
+
+
+## RQ3: Day 4 - what is the treatment difference within neutrophils, macrophages, monocytes {.tabset}
+
+```{r RQ3_day_4_treatment_differences}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_Day_4_RQ3_treatment_difference_within_populations/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+
+# reduce dataset to just day 4 timepoint 
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$Time
+day4.seurat <- subset(CD45pos.seurat, idents = "Day4")
+
+
+
+if(long.compute){
+  
+  
+  day4.seurat <- PrepSCTFindMarkers(day4.seurat)
+  
+  # set assay
+  DefaultAssay(day4.seurat) <- "SCT"
+  
+  
+  # create new cell_type plus treatment 
+  day4.seurat@meta.data$cell_type_treat <- paste0(day4.seurat@meta.data$cell_type, "_", day4.seurat@meta.data$Treatment)
+  
+  # set Idents
+  Idents(day4.seurat) <- "cell_type_treat"
+  
+  
+  # cell types to perform analysis for 
+  celltype.vec <- c("Macrophages", "DC", "Monocytes", "Neutrophils")
+  
+  # create list to store output
+  DEG.list <- list()
+  
+  # run through DEG specifically between vehicle and treatment for each cluster 
+  
+  for(i in seq_along(celltype.vec)){
+    
+    temp.de <- FindMarkers(day4.seurat,
+                           assay = "SCT",
+                           ident.1 = paste0(celltype.vec[i], "_PDS"),
+                           ident.2 = paste0(celltype.vec[i], "_Vehicle"),
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    DEG.list[[i]] <- temp.de
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_Day_4_PDS_", celltype.vec[i], "_vs_Vehicle_", celltype.vec[i], ".csv"))
+    
+    
+  }
+  # add names to DEG.list
+  names(DEG.list) <- celltype.vec
+  
+  # save DEG list to file 
+  saveRDS(DEG.list, paste0(output.dir, "DEG_Day_4_PDS_vs_Vehicle_celltypes_list_object.rds"))
+  
+    rm(day4.seurat)
+
+}else{
+  
+  DEG.list <- readRDS(paste0(output.dir, "DEG_Day_4_PDS_vs_Vehicle_celltypes_list_object.rds"))
+  
+}
+
+
+# plot DEGs 
+
+
+if(do.plot){
+  
+  for(i in 1:length(DEG.list)){
+    
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- DEG.list[[i]] %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0(names(DEG.list)[i], " PDS vs Vehicle"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_Day_4_PDS_vs_Vehicle_cluster_", names(DEG.list)[i], ".pdf"))
+    dev.off()
+    
+    
+  }
+  
+}
+
+
+
+```
+
+
+
+## RQ4: Day 9 - what is the treatment difference within neutrophils, macrophages, monocytes, T-cells {.tabset}
+
+```{r RQ4_treatment_difference_Day9_celltypes}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_Day_9_RQ4_treatment_difference_within_populations/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+
+# reduce dataset to just day 4 timepoint 
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$Time
+day9.seurat <- subset(CD45pos.seurat, idents = "Day9")
+
+
+
+if(long.compute){
+  
+  
+  day9.seurat <- PrepSCTFindMarkers(day9.seurat)
+  
+  # set assay
+  DefaultAssay(day9.seurat) <- "SCT"
+  
+  
+  # create new cell_type plus treatment 
+  
+  # currently tregs is grouped with t-cells, split this back out 
+  
+  day9.seurat@meta.data <- day9.seurat@meta.data %>%
+    dplyr::mutate(cell_type = case_when(cluster_anno == "Tregs" ~ "Tregs", 
+                                        TRUE ~ cell_type))
+  
+  table(day9.seurat@meta.data$cell_type)
+  
+  day9.seurat@meta.data$cell_type_treat <- paste0(day9.seurat@meta.data$cell_type, "_", day9.seurat@meta.data$Treatment)
+  
+  # set Idents
+  Idents(day9.seurat) <- "cell_type_treat"
+  
+  
+  # cell types to perform analysis for 
+  celltype.vec <- c("Macrophages", "DC", "Monocytes", "Neutrophils", "Tcells", "NKcells")
+  
+  # create list to store output
+  DEG.list <- list()
+  
+  # run through DEG specifically between vehicle and treatment for each cluster 
+  
+  for(i in seq_along(celltype.vec)){
+    
+    temp.de <- FindMarkers(day9.seurat,
+                           assay = "SCT",
+                           ident.1 = paste0(celltype.vec[i], "_PDS"),
+                           ident.2 = paste0(celltype.vec[i], "_Vehicle"),
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    DEG.list[[i]] <- temp.de
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_Day_9_PDS_", celltype.vec[i], "_vs_Vehicle_", celltype.vec[i], ".csv"))
+    
+    
+  }
+  # add names to DEG.list
+  names(DEG.list) <- celltype.vec
+  
+  # save DEG list to file 
+  saveRDS(DEG.list, paste0(output.dir, "DEG_Day_9_PDS_vs_Vehicle_celltypes_list_object.rds"))
+  
+  rm(day9.seurat)
+  
+}else{
+  
+  DEG.list <- readRDS(paste0(output.dir, "DEG_Day_9_PDS_vs_Vehicle_celltypes_list_object.rds"))
+  
+}
+
+
+# plot DEGs 
+
+
+if(do.plot){
+  
+  for(i in 1:length(DEG.list)){
+    
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- DEG.list[[i]] %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0(names(DEG.list)[i], " PDS vs Vehicle"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_Day_9_PDS_vs_Vehicle_cluster_", names(DEG.list)[i], ".pdf"))
+    dev.off()
+    
+    
+  }
+  
+}
+
+
+```
+
+
+## RQ5: DEG Neutrophils PDS Day 9 vs Neutrophils PDS Day 4 {.tabset}
+
+```{r RQ5_D9_Neutrophils_PDS_vs_D4_Neutrophils_PDS}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_RQ5_D9_Neutrophils_PDS_vs_D4_Neutrophils_PDS/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+
+
+
+# reduce dataset to just day 4 timepoint 
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$cell_type
+neutrophil.seurat <- subset(CD45pos.seurat, idents = "Neutrophils")
+
+
+
+if(long.compute){
+  
+  
+  neutrophil.seurat <- PrepSCTFindMarkers(neutrophil.seurat)
+  
+  # set assay
+  DefaultAssay(neutrophil.seurat) <- "SCT"
+  
+  
+  # create new time plus treatment 
+ 
+  neutrophil.seurat@meta.data$Time_treat <- paste0(neutrophil.seurat@meta.data$Time, "_", neutrophil.seurat@meta.data$Treatment)
+  
+  # set Idents
+  Idents(neutrophil.seurat) <- "Time_treat"
+  
+  
+  
+    temp.de <- FindMarkers(neutrophil.seurat,
+                           assay = "SCT",
+                           ident.1 = "Day9_PDS",
+                           ident.2 = "Day4_PDS",
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_Day_9_PDS_neutrophils_vs_Day_4_PDS_neutrophils.csv"))
+    
+    
+  
+}
+
+
+# plot DEGs 
+
+
+if(do.plot){
+  
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- temp.de %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0("Neutrophils Day 9 PDS vs Day 4 PDS"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_Day_9_neutrophils_PDS_vs_Day_4_neutrophils_PDS.pdf"))
+    dev.off()
+    
+    
+  
+    
+  #####################
+  # heatmaps of top DEGs
+  #####################
+  
+  
+  
+  Idents(neutrophil.seurat) <- neutrophil.seurat@meta.data$Time_treat
+  
+  
+
+  pseudo.neutrophils <- AggregateExpression(neutrophil.seurat,
+                                           assays = "SCT",
+                                           return.seurat = TRUE, 
+                                           group.by = c("Time_treat"))
+  
+  
+  # Extract top fold change DEGs 
+  
+  goi <- temp.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(abs(avg_log2FC) > 2) %>%
+    dplyr::arrange(desc(avg_log2FC)) %>%
+    rownames()
+  
+  
+  # plot heatmap
+  DoHeatmap(pseudo.neutrophils, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Heatmap_Day_9_PDS_neutrophils_vs_Day_4_PDS_neutrophils_logfold_2.pdf"))
+  dev.off()
+  
+  
+  # extract just top 10 up and down degs
+  goi.up <- temp.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    rownames()
+  
+  goi.dn <- temp.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(-10, avg_log2FC) %>%
+    rownames()
+  
+  goi <- unique(c(goi.up, goi.dn))
+  
+  DoHeatmap(pseudo.neutrophils, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Pos_Heatmap_Day_9_PDS_neutrophils_vs_Day_4_PDS_neutrophils_top_10_DEGs_up_down.pdf"))
+  dev.off()
+  
+}
+  
+
+
+# clean environment 
+  rm(neutrophil.seurat)
+  gc()
+
+```
+
+
+
+
+
+## RQ6: Zoom in on T-cells, can identify Cytotoxic CD4 T-cells? {.tabset}
+
+```{r Cytotoxic_CD4_Tcells}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_Cytotoxic_CD4_Tcells/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# currently tregs is grouped with t-cells, split this back out 
+CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
+  dplyr::mutate(cell_type = case_when(cluster_anno == "Tregs" ~ "Tregs", 
+                                      TRUE ~ cell_type))
+
+
+# reduce dataset to just day 4 timepoint 
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$cell_type
+Tcell.seurat <- subset(CD45pos.seurat, idents = c("Tcells", "Tregs"))
+
+DefaultAssay(Tcell.seurat) <- "RNA"
+
+Tcell.seurat <- FindVariableFeatures(Tcell.seurat, assay = "RNA")
+
+imputation.features <- VariableFeatures(Tcell.seurat)
+
+# ensure cd8 and cd4 key markers are included 
+imputation.features <- c(paste0(imputation.features), "Cd4", "Cd8a", "Cd8b1", "Foxp3")
+imputation.features <- unique(imputation.features)
+
+DefaultAssay(Tcell.seurat) <- "SCT"
+
+
+
+######################
+# Impute values 
+######################
+if(long.compute){
+  Tcell.seurat <- RunALRA(Tcell.seurat, 
+                             genes.use = imputation.features)
+}
+
+
+DefaultAssay(Tcell.seurat) <- "SCT"
+
+
+# recalculate UMAP on just T-cell population 
+Tcell.seurat <- RunUMAP(Tcell.seurat, 
+                        reduction = "integrated.cca.sct",
+                        dims = 1:30)
+  
+# find clusters
+Tcell.seurat <- FindClusters(Tcell.seurat, 
+                          resolution = 1, 
+                          graph.name = "SCT_snn")  
+
+table(Tcell.seurat@meta.data$seurat_clusters)
+
+  
+
+Seurat::DimPlot(object = Tcell.seurat, 
+                  reduction = "umap", 
+                  label = TRUE, 
+                  label.size = 4, 
+                  group.by = "cell_type") +
+    NoLegend()
+  
+Seurat::DimPlot(object = Tcell.seurat, 
+                  reduction = "umap", 
+                  label = TRUE, 
+                  label.size = 4, 
+                  group.by = "seurat_clusters") +
+    NoLegend()
+  
+
+
+  grep("Cd8.*", rownames(Tcell.seurat), value = T)
+
+  # visualise gene expression - use imputed values 
+  DefaultAssay(Tcell.seurat) <- "alra"
+
+  Stacked_VlnPlot(Tcell.seurat, 
+                features = c("Cd8a", "Cd8b1", "Cd4", "Gzmb", "Foxp3"))
+  
+  
+  
+  scCustomize::FeaturePlot_scCustom(Tcell.seurat, reduction = "umap", feature = "Cd4")
+    scCustomize::FeaturePlot_scCustom(Tcell.seurat, reduction = "umap", feature = "Gzmb")
+
+  
+    
+  
+  
+  Seurat::DimPlot(object = Tcell.seurat, 
+                  reduction = "umap", 
+                  label = TRUE, 
+                  label.size = 4, 
+                  group.by = "SampleID") +
+    NoLegend()
 
 
 
@@ -1554,424 +2489,54 @@ dev.off()
 
 
 
+## Imputation {.tabset}
+
+### Imputation calculation
+
+```{r seurat_imputation, eval = FALSE}
+
+output.dir <- "results/scRNAseq/figures/QC/"
+
+# Create output directory
+if(!dir.exists(paste0(output.dir))){
+  dir.create(paste0(output.dir), 
+             recursive = T)
+}
+
+######################
+# Impute values 
+######################
+if(long.compute){
+  seurat.combined <- RunALRA(seurat.combined, 
+                             genes.use = rownames(seurat.combined))
+}
+
+# 8.37% of the values became negative in the scaling process and were set to zero
+# The matrix went from 29.63% nonzero to 38.95% nonzero
 
 
-## cluster highlight plots
-```{r remedy001}
-
-scCustomize::Cluster_Highlight_Plot(CD45pos.seurat, cluster_name = 25, reduction = "umap")
-
-
-```
-
-
-
-# NOT WORKING - check all code 
-# also not written again for this dataset specific analysis - check all code 
-
-
-
-## NO LONGER USED
-## annotate clusters {.tabset}
-```{r annotate_clusters}
-# 
-# if(long.compute){
-#   
-# ########################################################
-# # provide annotation for clusters where possible 
-# ########################################################
-# 
-# 
-# # create output dir
-# output.dir <- paste0("results/CD45Pos_cluster_vs_azimuth/")
-# 
-# if(!dir.exists(output.dir)){
-#   dir.create(output.dir, 
-#              recursive = T)
-#   
-# }
-# 
-# 
-# #############################
-# # cluster by annotation 
-# #############################
-# 
-# # large grain annotation
-# 
-# # broad annotation 
-# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# # as opposed to clusters 50/50 split between annotations 
-# 
-# 
-# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l1, CD45pos.seurat@meta.data$seurat_clusters)
-# cluster.totals <- colSums(x)
-# y <- sweep(x, 2, cluster.totals, FUN = "/")
-# y <- y*100
-# y <- as.data.frame(y)
-# 
-# 
-# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-# 
-# for(i in seq_along(cluster.id)){
-#   
-#   y.filt <- y %>%
-#     filter(Var2 == cluster.id[i])
-#   
-#   
-#   library(ggplot2)
-#   
-#   p1 <- ggplot(y.filt) +
-#     aes(x = Var1, y = Freq, fill = Var1) +
-#     geom_col() +
-#     scale_fill_hue(direction = 1) +
-#     labs(title = paste0("Cluster ", cluster.id[i])) +
-#            coord_flip() +
-#            theme_minimal() +
-#            theme(legend.position = "none") +
-#            ylim(0, 100)
-#          
-#          print(p1)
-#          
-#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_broad_azimuth_annotation_freq.pdf"))
-#          dev.off()
-#          
-# }
-# 
-# 
-# #############################
-# # medium grain annotation 
-# #############################
-# 
-# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# # as opposed to clusters 50/50 split between annotations 
-# 
-# 
-# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l2, CD45pos.seurat@meta.data$seurat_clusters)
-# cluster.totals <- colSums(x)
-# y <- sweep(x, 2, cluster.totals, FUN = "/")
-# y <- y*100
-# y <- as.data.frame(y)
-# 
-# 
-# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-# 
-# for(i in seq_along(cluster.id)){
-#   
-#   y.filt <- y %>%
-#     filter(Var2 == cluster.id[i])
-#   
-#   
-#   library(ggplot2)
-#   
-#   p1 <- ggplot(y.filt) +
-#     aes(x = Var1, y = Freq, fill = Var1) +
-#     geom_col() +
-#     scale_fill_hue(direction = 1) +
-#     labs(title = paste0("Cluster ", cluster.id[i])) +
-#            coord_flip() +
-#            theme_minimal() +
-#            theme(legend.position = "none") +
-#            ylim(0, 100)
-#          
-#          print(p1)
-#          
-#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_medium_grain_azimuth_annotation_freq.pdf"))
-#          dev.off()
-#          
-# }
-# 
-# #############################
-# # fine grain annotation 
-# #############################
-# 
-# ## look at all clusters again across annotation. as some clusters maybe can be called X celltype where they are say 70% Xcelltype and rest is made up of small annotations 
-# # as opposed to clusters 50/50 split between annotations 
-# 
-# 
-# # calculate the frequency of each cluster that has an azimuth annotation, therefore the clusters which are primarily 1 annotation can easily be defined 
-# x <- table(CD45pos.seurat@meta.data$predicted.celltype.l3, CD45pos.seurat@meta.data$seurat_clusters)
-# cluster.totals <- colSums(x)
-# y <- sweep(x, 2, cluster.totals, FUN = "/")
-# y <- y*100
-# y <- as.data.frame(y)
-# 
-# 
-# cluster.id <- unique(CD45pos.seurat@meta.data$seurat_clusters)
-# 
-# for(i in seq_along(cluster.id)){
-#   
-#   y.filt <- y %>%
-#     filter(Var2 == cluster.id[i])
-#   
-#   
-#   library(ggplot2)
-#   
-#   p1 <- ggplot(y.filt) +
-#     aes(x = Var1, y = Freq, fill = Var1) +
-#     geom_col() +
-#     scale_fill_hue(direction = 1) +
-#     labs(title = paste0("Cluster ", cluster.id[i])) +
-#            coord_flip() +
-#            theme_minimal() +
-#            theme(legend.position = "none") +
-#            ylim(0, 100)
-#          
-#          print(p1)
-#          
-#          dev.copy(pdf, paste0(output.dir, "Cluster_", cluster.id[i], "_fine_grain_azimuth_annotation_freq.pdf"))
-#          dev.off()
-#          
-# }
-# 
-# 
-# 
-# 
-# 
-# 
-# ########################################################
-# # Use gene expression profiles to investigate clusters
-# ########################################################
-# 
-# 
-# # aggregate expression for heatmap visualisation
-# 
-# pseudo.cd45pos <- AggregateExpression(CD45pos.seurat,
-#                                       assays = "SCT",
-#                                       return.seurat = TRUE, 
-#                                       group.by = c("seurat_clusters"))
-# 
-# 
-# 
-# # load deg data
-# CD45Pos.de <- read.csv("results/CD45Pos_DEG_analysis/CD45Pos_DEGs.csv")
-# 
-# 
-# 
-# # some clusters were easily annotated based on overlap and call by azimuth reference 
-# # some are ambiguous 
-# # inspect gene expression profiles for these ambiguous clusters
-# 
-# # this section was done interactively comparing previous plots with visualising certain genes and DEG for each cluster
-# 
-# grep("FCGR", rownames(pseudo.cd45pos), value = T)
-# 
-# 
-# goi <- CD45Pos.de %>%
-#   filter(p_val_adj < 0.05) %>%
-#   group_by(cluster) %>%
-#   filter(cluster == 10) %>%
-#   top_n(50, avg_log2FC) %>%
-#   pull(gene)
-# 
-# goi
-#   
-#   DoHeatmap(pseudo.cd45pos, 
-#           features = goi, 
-#           draw.lines = FALSE, 
-#           raster = FALSE)
-# 
-# 
-# scCustomize::Cluster_Highlight_Plot(CD45pos.seurat, cluster_name = 25, reduction = "umap")
-# 
-# VlnPlot_scCustom(CD45pos.seurat, features = "IL2RA", pt.size = 0.1)
-# 
-# 
-# 
-# 
-# ######################################################
-# # using all above plots annotation definitions are 
-# ######################################################
-# 
-# # broad annotations
-# # cluster annotations 
-# myeloid.clusters <- c(0)
-# mono.clusters <- c(2, 4, 6, 7, 9, 12, 13, 14, 15, 17, 19, 20, 21, 22, 24)
-# dc.clusters <- c(11, 18, 26)
-# 
-# bcell.clusters <- c(5)
-# erythrocyte.clusters <- c(27)
-# 
-# t.cell.clusters <- c(1, 3, 23)
-# nk.clusters <- c(8, 16)
-# nk.or.t.cell.clusters <- c(10, 25) # as in ambig if nk or t or nkt
-# 
-# 
-# # fine grain annotations
-# cd14.mono.clusters <- c(2, 4, 6, 9, 14, 20, 22)
-# cd16.mono.clusters <- c(13, 17)
-# 
-# pDC.clusters <- c(26)
-# cDC1.clusters <- c(18)
-# cDC2.clusters <- c(11)
-# 
-# cd8.clusters <- c(3)
-# cd4.clusters <- c(23)
-# 
-# 
-# 
-# 
-# #
-# # Cluster 23 might be treg cd4
-# 
-# 
-# ############################################################
-# # Define clusters based on above data and interpretation
-# ############################################################
-# 
-# 
-# CD45pos.seurat@meta.data <- CD45pos.seurat@meta.data %>%
-#   dplyr::mutate(Anno_l1 = case_when(seurat_clusters %in% myeloid.clusters ~ paste0("Myeloid_", seurat_clusters), 
-#                                     seurat_clusters %in% mono.clusters ~ paste0("Monocyte_", seurat_clusters), 
-#                                     seurat_clusters %in% dc.clusters ~ paste0("DC_", seurat_clusters), 
-#                                     seurat_clusters %in% bcell.clusters ~ paste0("Bcell_", seurat_clusters), 
-#                                     seurat_clusters %in% erythrocyte.clusters ~ paste0("Erythrocyte_", seurat_clusters), 
-#                                     seurat_clusters %in% t.cell.clusters ~ paste0("Tcell_", seurat_clusters), 
-#                                     seurat_clusters %in% nk.clusters ~ paste0("NK_", seurat_clusters), 
-#                                     seurat_clusters %in% nk.or.t.cell.clusters ~ paste0("NKorTcell_", seurat_clusters), 
-#                                     TRUE ~ seurat_clusters), 
-#                 Anno_l2 = case_when(seurat_clusters %in% cd14.mono.clusters ~ paste0("CD14_Mono_", seurat_clusters),
-#                                     seurat_clusters %in% cd16.mono.clusters ~ paste0("CD16_Mono_", seurat_clusters),
-#                                     seurat_clusters %in% pDC.clusters ~ paste0("pDC_", seurat_clusters),
-#                                     seurat_clusters %in% cDC1.clusters ~ paste0("cDC1_", seurat_clusters),
-#                                     seurat_clusters %in% cDC2.clusters ~ paste0("cDC2_", seurat_clusters),
-#                                     seurat_clusters %in% cd8.clusters ~ paste0("CD8T_", seurat_clusters),
-#                                     seurat_clusters %in% cd4.clusters ~ paste0("CD4T_", seurat_clusters),
-#                                     TRUE ~ Anno_l1))
-# 
-# 
-# ##############################
-# # visualise annotations 
-# ##############################
-# 
-# # create output dir
-# output.dir <- paste0("results/CD45Pos_cluster_annotations/")
-# 
-# if(!dir.exists(output.dir)){
-#   dir.create(output.dir, 
-#              recursive = T)
-#   
-# }
-# 
-# 
-# DimPlot_scCustom(CD45pos.seurat, 
-#                  label = TRUE,
-#                  group.by = "Anno_l1", 
-#                  reduction = "umap") + NoLegend()
-# 
-# dev.copy(pdf, paste0(output.dir, "UMAP_clusters_annotated_l1.pdf"))
-# dev.off()
-# 
-# 
-# DimPlot_scCustom(CD45pos.seurat, 
-#                  label = TRUE,
-#                  group.by = "Anno_l2", 
-#                  reduction = "umap") + NoLegend()
-# 
-# dev.copy(pdf, paste0(output.dir, "UMAP_clusters_annotated_l2.pdf"))
-# dev.off()
-# 
-# 
-# 
-# # save seurat object after annotation 
-# SaveSeuratRds(CD45pos.seurat, 
-#               file = "saves/Nils_seurat_CD45Pos.rds")
-# }
+####################
+# Calculate k value
+####################
+if(long.compute){
+  
+  Idents(seurat.combined) <- seurat.combined@meta.data$seurat_clusters
+  seurat.combined.small <- subset(seurat.combined, downsample = 100)
+  
+  ALRA.out <- RunALRA(seurat.combined.small,
+                      k.only = TRUE)
+  
+  ggouts <- ALRAChooseKPlot(ALRA.out)
+  
+  ggouts
+  dev.copy(pdf, paste0(output.dir, "Imputation_K_plot.pdf"))
+  dev.off()
+  
+}
 
 
-
-
-# for insight into markers can use the below resource 
-# load cell marker info from CellMarker2.0 (http://bio-bigdata.hrbmu.edu.cn/CellMarker/index.html)
-# cellmarkers <- readxl::read_xlsx("data/Misc/Cell_marker_All.xlsx")
-# 
-# unique(cellmarkers$tissue_class)
-# 
-# # filter
-# mouse.normal <- cellmarkers %>%
-#   filter(species == "Mouse") %>%
-#   filter(cell_type == "Normal cell")
-# 
-# unique(mouse.normal$cell_name)
-# 
-# 
-# Tcell.markers <- mouse.normal %>%
-#   filter(grepl("Natural killer", cell_name)) %>%
-#   distinct(Symbol)
-# 
-# print(Tcell.markers, n = 100)
-
+# set default assay back to RNA
+DefaultAssay(seurat.combined) <- "RNA"
+Idents(seurat.combined) <- seurat.combined@meta.data$seurat_clusters
 
 ```
-
-
-
-
-
-## Lineage analysis {.tabset}
-
-### Lineage analysis using GEMLI
-
-```{r GEMLI_analysis}
-
-#devtools::install_github("UPSUTER/GEMLI", subdir="GEMLI_package_v0")
-library("GEMLI")
-
-
-load("~/Downloads/GEMLI_example_data_matrix.RData")
-
-#GEMLI_items[['gene_expression']] = data_matrix
-
-DefaultAssay(CD45pos.seurat) <- "SCT"
-Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$SampleID
-table(Idents(CD45pos.seurat))
-temp.object <- subset(CD45pos.seurat, downsample = 3000)
-
-count.matrix <- LayerData(temp.object, assay = "SCT", layer = "data")
-
-GEMLI_items = list()
-GEMLI_items[['gene_expression']] = as.matrix(count.matrix)
-
-GEMLI_items <- predict_lineages(GEMLI_items)
-
-library(igraph)
-
-# style = "fr", "kk", "grid"
-visualize_as_network(GEMLI_items, cutoff=90, layout_style = "kk") # top image
-visualize_as_network(GEMLI_items, cutoff=50, layout_style = "kk") # lower image
-
-GEMLI_items = prediction_to_lineage_information(GEMLI_items, cutoff=50)
-
-GEMLI_items$predicted_lineage_table[1:50,]
-
-# trim lineages that are too big
-suggest_network_trimming_to_size(GEMLI_items, max_size=2, cutoff=50)
-
-GEMLI_items_post_processed = trim_network_to_size(GEMLI_items, max_size=2, cutoff=50)
-visualize_as_network(GEMLI_items_post_processed, cutoff=50) 
-
-
-
-#load('~/Downloads/GEMLI_crypts_example_cell_type_annotation.RData')
-clust.anno <- temp.object@meta.data %>%
-  dplyr::select("seurat_clusters") %>%
-  dplyr::rename(cell.type = "seurat_clusters")
-
-GEMLI_items_post_processed[['cell_type']] = clust.anno
-
-
-visualize_as_network(GEMLI_items_post_processed, cutoff=70, max_edge_width=5, display_orphan=F, include_labels=F, ground_truth=F, highlight_FPs=T, layout_style="kk", cell_type_colors=T)
-
-GEMLI_items_post_processed = prediction_to_lineage_information(GEMLI_items_post_processed, cutoff=50)
-cell_type_composition_plot(GEMLI_items_post_processed, cell_type_colors=T, type=c("bubble"))
-
-unique(GEMLI_items_post_processed[['cell_type']]$cell.type)
-
-
-
-```
-
-
-
-
