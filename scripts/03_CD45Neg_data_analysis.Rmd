@@ -1805,7 +1805,163 @@ if(long.compute){
 ```
 
 
+## RQ3: DEGs tumour clusters across treatment {.tabset}
 
+
+```{r RQ3_DEG_tumor_clusters_across_treatment}
+
+
+# create output dir
+output.dir <- paste0("results/CD45Neg_tumor_clusters_DEGs_across_treatment/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+table(CD45neg.seurat@meta.data$cluster_anno, CD45neg.seurat@meta.data$Disease)
+
+# create new metadata disease and treatment 
+CD45neg.seurat@meta.data$disease_treat <- paste0(CD45neg.seurat@meta.data$Disease, "_", CD45neg.seurat@meta.data$Treatment)
+
+Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$disease_treat
+
+
+
+if(long.compute){
+  
+  
+  CD45neg.seurat <- PrepSCTFindMarkers(CD45neg.seurat)
+  
+  # set assay
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+
+    
+    tumor.de <- FindMarkers(CD45neg.seurat,
+                           assay = "SCT",
+                           ident.1 = "tumor_PDS",
+                           ident.2 = "tumor_Vehicle",
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    
+    
+    # save to file 
+    write.csv(tumor.de, paste0(output.dir, "DEGs_Tumor_PDS_vs_Tumor_Vehicle.csv"))
+    
+    
+}
+
+
+
+# plot DEGs 
+if(do.plot){
+  
+    FDR.theshold <- 0.01
+    logFC.threshold <- 1
+    
+    # filter data
+    input.data <- tumor.de %>%
+      dplyr::rename(logFC = avg_log2FC) %>%
+      dplyr::rename(FDR = p_val_adj) %>%
+      filter(FDR < FDR.theshold)
+    
+    # color points
+    volcano.col <- usefulfunctions::colour.points.volcano(input.data,
+                                                          increase.col = "Red",
+                                                          decreased.col = "Blue",
+                                                          FDR.cutoff = FDR.theshold, 
+                                                          logFC.cutoff = logFC.threshold)
+    # plot heatmap
+    print(
+      usefulfunctions::custom.enhanced.volcano(input.data, 
+                                               pCutoff = FDR.theshold,
+                                               FCcutoff = logFC.threshold,
+                                               title = paste0("Tumor PDS vs Tumor vehicle"),
+                                               subtitle = paste0("adjPval threshold = ", FDR.theshold, " & log2FC threshold = ", logFC.threshold),
+                                               colCustom = volcano.col)
+    )
+    dev.copy(pdf, paste0(output.dir, "VolcanoPlot_Tumor_PDS_vs_Tumor_Vehicle.pdf"))
+    dev.off()
+    
+    
+  
+    
+  #####################
+  # heatmaps of top DEGs
+  #####################
+  
+  
+  
+  Idents(CD45neg.seurat) <- CD45neg.seurat@meta.data$disease_treat
+  
+  
+
+  pseudo.tumor <- AggregateExpression(CD45neg.seurat,
+                                           assays = "SCT",
+                                           return.seurat = TRUE, 
+                                           group.by = c("disease_treat"))
+  
+  
+  # Extract top fold change DEGs 
+  
+  goi <- tumor.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::filter(abs(avg_log2FC) > 2) %>%
+    dplyr::arrange(desc(avg_log2FC)) %>%
+    rownames()
+  
+  
+  # plot heatmap
+  DoHeatmap(pseudo.tumor, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Neg_Heatmap_Tumor_PDS_vs_Tumor_Vehicle_logfold_2.pdf"))
+  dev.off()
+  
+  
+  # extract just top 10 up and down degs
+  goi.up <- tumor.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(10, avg_log2FC) %>%
+    rownames()
+  
+  goi.dn <- tumor.de %>%
+    dplyr::filter(p_val_adj < 0.05) %>%
+    dplyr::top_n(-10, avg_log2FC) %>%
+    rownames()
+  
+  goi <- unique(c(goi.up, goi.dn))
+  
+  DoHeatmap(pseudo.tumor, 
+            features = goi, 
+            draw.lines = FALSE, 
+            raster = FALSE) + 
+    scico::scale_fill_scico(palette = "batlow", 
+                            direction = 1, 
+                            na.value = "white")
+  
+  dev.copy(pdf, paste0(output.dir, "CD45Neg_Heatmap_Tumor_PDS_vs_Tumor_Vehicle_top_10_DEGs_up_down.pdf"))
+  dev.off()
+  
+}
+  
+
+
+# clean environment 
+  rm(pseudo.tumor)
+  gc()
+
+
+```
 
 
 

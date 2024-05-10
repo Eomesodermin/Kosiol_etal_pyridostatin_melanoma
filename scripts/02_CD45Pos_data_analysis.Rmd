@@ -2463,7 +2463,7 @@ Seurat::DimPlot(object = Tcell.seurat,
   DefaultAssay(Tcell.seurat) <- "alra"
 
   Stacked_VlnPlot(Tcell.seurat, 
-                features = c("Cd8a", "Cd8b1", "Cd4", "Gzmb", "Foxp3"))
+                features = c("Cd8a", "Cd8b1", "Cd4", "Gzmb", "Gzma", "Nkg7", "Foxp3"))
   
   
   
