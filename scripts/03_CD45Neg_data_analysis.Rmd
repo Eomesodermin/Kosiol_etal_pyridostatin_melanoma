@@ -114,6 +114,12 @@ if(long.compute){
   
   # load cleaned dataset 
   CD45neg.seurat <- LoadSeuratRds("saves/CD45neg_seurat.rds")
+  DefaultAssay(CD45neg.seurat) <- "SCT"
+  
+  # Create new metadata column that groups all tumor together 
+  CD45neg.seurat@meta.data <- CD45neg.seurat@meta.data %>%
+    dplyr::mutate(celltype = case_when(Disease == "tumor" ~ "tumor",
+                                       Disease == "normal" ~ cluster_anno))
   
   
 }
@@ -1167,6 +1173,7 @@ if(!dir.exists(output.dir)){
   
 }
 
+
 ################################
 # Get cell cycle genes 
 ################################
@@ -1221,6 +1228,14 @@ scCustomize::DimPlot_scCustom(CD45neg.seurat,
 dev.copy(pdf, paste0(output.dir, "UMAP_CD45Neg_cluster_by_phase.pdf"))
 dev.off()
 
+scCustomize::DimPlot_scCustom(CD45neg.seurat, 
+                              group.by = "celltype",
+                              split.by = "Phase",
+                              label = TRUE,
+                              reduction = "umap")
+
+dev.copy(pdf, paste0(output.dir, "UMAP_CD45Neg_celltype_by_phase.pdf"))
+dev.off()
 
 # Stacked VlnPlot
 scCustomize::Stacked_VlnPlot(CD45neg.seurat,
@@ -1230,6 +1245,13 @@ scCustomize::Stacked_VlnPlot(CD45neg.seurat,
 dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_cell_cycle.pdf"))
 dev.off()
 
+# Stacked VlnPlot
+scCustomize::Stacked_VlnPlot(CD45neg.seurat,
+                             features = c("S.Score", "G2M.Score"), 
+                             group.by = "celltype")
+
+dev.copy(pdf, paste0(output.dir, "Stacked_VlnPlot_CD45Neg_cell_cycle_by_celltype.pdf"))
+dev.off()
 
 
 
@@ -1266,6 +1288,41 @@ ggplot(freq.table) +
   facet_wrap(vars(Var1))
 
 ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_cluster.pdf"))
+
+
+
+
+# Frequency of phase per celltype
+
+dist.table <- table(CD45neg.seurat@meta.data$celltype, CD45neg.seurat@meta.data$Phase)
+
+cluster.total <- rowSums(dist.table)
+
+freq.table <- sweep(dist.table, 1, cluster.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+rowSums(freq.table)
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("G1", "G2M", "S"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Predicted phase", y = "% of celltype", title = "Frequency of phase per celltype") +
+  scale_fill_manual(values = c(G1 = "lightblue", G2M = "orange", S = "red")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_phase_per_celltype.pdf"))
+
+
 
 
 # Frequency of phase per treatment
