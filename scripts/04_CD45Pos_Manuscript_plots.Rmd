@@ -1,0 +1,789 @@
+---
+title: "CD45Pos_manuscript_plots"
+author: "Dillon Corvino"
+date: "25/01/2024"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+Built with R version `r getRversion()`
+
+## Setup {.tabset}
+
+### Dataset information
+```{r Dataset_Info}
+
+# Data 
+# B16 - OVA 
+
+# PDS = I.T - bind Gquadraplex
+# day 4 post-treatment 
+# day 9 post-treatment
+
+# Research questions 
+# How does PDS induces an anti-tumor immune response?
+# Known that after PDS treatment, certain DAMPs are induced, intratumoral chemokine levels go up drastically and subsequntly immune cells are recruited into the tumor.
+# Main research questions are:
+#1. Which cell subsets are producing the chemokines
+#2. Are there differences between macrophages and DCs between PDS and Vehicle (because there are DAMPs that should activate them)
+#3. How does the treatment effect the tumor cells (is it possible to discriminate them from other tissue cells, if not they express ovalbumin...this should make it at least possible to identify them.)
+
+
+
+
+# key genes
+# IL1b, IL6, IL12, IFNG, TNFA, 
+
+# CCL2,3,4,5 
+# CXCL1, CXCL9,10,13 
+
+
+
+
+
+```
+
+
+### Environment
+```{r setup}
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,  
+  eval = TRUE, 
+  tidy = TRUE
+)
+
+knitr::opts_knit$set(
+  root.dir = "../"
+)
+
+
+# Environment Set up
+rm(list = ls()) #Clean workspace
+cat("\014")     #Clean Console
+gc() # Free memory
+
+# pipeline variables
+long.compute <- FALSE
+do.plot <- TRUE
+quick.load <- TRUE
+
+# Establish working directory
+library("rstudioapi")
+
+# Set working directory to source file location
+setwd(dirname(getActiveDocumentContext()$path))
+setwd("..")
+
+# Create output directories & load custom functions & colour scheme
+source("scripts/Setup.R", local = knitr::knit_global())
+
+
+library("Seurat")
+library("SeuratObject")
+library("SeuratData")
+library("SeuratWrappers")
+library("dplyr")
+library("scCustomize")
+library("tibble")
+
+
+# load output from preprocessing script
+if(long.compute){
+  
+  CD45pos.seurat <- LoadSeuratRds("saves/Preprocessed_CD45Pos.rds")
+  
+  # set levels for easier downstream plotting 
+  CD45pos.seurat@meta.data$Treatment <- factor(CD45pos.seurat@meta.data$Treatment, levels = c("Vehicle", "PDS"))
+  CD45pos.seurat@meta.data$Time <- factor(CD45pos.seurat@meta.data$Time, levels = c("Day4", "Day9"))
+  CD45pos.seurat@meta.data$SampleID <- factor(CD45pos.seurat@meta.data$SampleID, levels = c("Day4_Vehicle_CD45Pos", "Day4_PDS_CD45Pos", "Day9_Vehicle_CD45Pos", "Day9_PDS_CD45Pos"))
+  
+}else if(quick.load){
+  
+  # load cleaned dataset 
+  CD45pos.seurat <- LoadSeuratRds("saves/CD45pos_seurat.rds")
+  DefaultAssay(CD45pos.seurat) <- "SCT"
+  
+  
+}
+
+
+```
+
+
+## Plots for manuscript {.tabset}
+
+### Set up object
+```{r set_up_object}
+
+# create output dir
+output.dir <- paste0("results/CD45Pos_manuscript_plots/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+# Day 4 dataset, PDS vs Vehicle overview
+CD45pos.seurat@meta.data
+
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$Time
+day4.seurat <- subset(CD45pos.seurat, idents = "Day4")
+
+table(day4.seurat@meta.data$cell_type)
+# note that day 4 only has 2 basophils | if only day 4 is plotted, this is weird and also no analysi can be done on 2 cells anyway
+# for clearer plot, remove these 2 basophils 
+Idents(day4.seurat) <- day4.seurat@meta.data$cell_type
+day4.seurat <- subset(day4.seurat, idents = "Basophils", invert = T)
+
+```
+
+
+### UMAP of Vehicle vs PDS Day 4
+```{r UMAP_PDS_Vehicle_D4}
+
+
+###################################################################################################################################################
+#1. 2 UMAPs (PDS and Vehicle day 4) annotated with the broad immune cell supsets (like neutrophil/monocyte/CD4 T cell/CD8 Tcell/NK cell etc.)
+###################################################################################################################################################
+
+
+# for split comparison plots, downsample to make visual comparisons more fair 
+# i dont like how squished the plots are when split.by is used. therefore plot each one individually for more prettyness 
+
+table(day4.seurat@meta.data$Treatment) # 9,950 and 8,082 cells
+Idents(day4.seurat) <- day4.seurat@meta.data$Treatment
+small.seurat <- subset(day4.seurat, downsample = 7000)
+
+
+Idents(small.seurat) <- small.seurat@meta.data$Treatment
+temp.seurat <- subset(small.seurat, idents = "Vehicle")
+
+
+# Vehicle
+scCustomize::DimPlot_scCustom(temp.seurat,
+                              reduction = "umap", 
+                              label = TRUE,
+                              figure_plot = TRUE,
+                              group.by = "cell_type", 
+                              pt.size = 1)
+
+dev.copy(pdf, paste0(output.dir, "CD45Pos_UMAP_Day_4_no_basophils_downsampled_vehicle.pdf"))
+dev.off()
+
+
+Idents(small.seurat) <- small.seurat@meta.data$Treatment
+temp.seurat <- subset(small.seurat, idents = "PDS")
+
+# PDS
+scCustomize::DimPlot_scCustom(temp.seurat,
+                              reduction = "umap", 
+                              label = TRUE,
+                              figure_plot = TRUE,
+                              group.by = "cell_type", 
+                              pt.size = 1)
+
+dev.copy(pdf, paste0(output.dir, "CD45Pos_UMAP_Day_4_no_basophils_downsampled_PDS.pdf"))
+dev.off()
+
+
+```
+
+### Cluster distribution
+```{r cluster_distribution}
+
+##################################################################################################################
+#2. A simple graph with the distribution (not total numbers but percentage) of these subsets with Vehicle vs PDS to highlight that especially neutrophils are enriched in PDS
+##################################################################################################################
+
+dist.table <- table(day4.seurat@meta.data$cell_type, day4.seurat@meta.data$Treatment)
+
+treatment.total <- colSums(dist.table)
+
+freq.table <- sweep(dist.table, 2, treatment.total, FUN = "/")
+freq.table <- freq.table*100
+
+colSums(freq.table) # validation that calculation on the right axis/margin
+
+# make dataframe 
+freq.table <- as.data.frame(freq.table)
+
+# set factor levels 
+freq.table$Var2 <- factor(freq.table$Var2, levels = c("Vehicle", "PDS"))
+
+
+ggplot(freq.table) +
+  aes(x = Var2, y = Freq, fill = Var2) +
+  geom_col() +
+  labs(x = "Treatment", y = "% of treatment", title = "Frequency of cluster per treatment") +
+  scale_fill_manual(values = c(Vehicle = "grey", PDS = "darkred")) + 
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(vars(Var1))
+
+ggsave(paste0(output.dir, "Barplot_freq_of_cluster_per_treatment_day4_only.pdf"))
+
+# rather make this plot in prism as it looks nicer 
+# export data for prism plotting 
+write.csv(freq.table, paste0(output.dir, "Barplot_freq_of_cluster_per_treatment_day_4_only.csv"))
+
+
+```
+
+### Heatmap with custom genes
+```{r custom_gene_heatmap}
+##################################################################################################################
+#3. The Violin plot with the custom genes either as violin or as heatmap with the same clusters as above
+##################################################################################################################
+
+# Note, I am unclear if Nils wants heatmap sep by treatment and cluster or just by cluster. 
+# will generate both plots 
+
+# firstly, treatment and cluster sep 
+
+# aggregate expression for heatmap visualisation
+DefaultAssay(day4.seurat) <- "SCT"
+pseudo.cd45pos <- AggregateExpression(day4.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("cell_type", "Treatment"))
+
+# genes to plot provided by Nils
+custom.genes <- c("Il1b", "Il6", "Il12a", "Il12b", "Ifng", "Tnf", "Ccl2", "Ccl3", "Ccl4", "Ccl5", "Cxcl1", "Cxcl9", "Cxcl10") # Cxcl13 not present in CD45Pos dataset
+
+
+###################
+# Plot heatmap
+###################
+
+DoHeatmap(pseudo.cd45pos, 
+          features = custom.genes, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+  ggplot2::scale_fill_gradient2(low = "blue", high = "red2")
+  
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_Day_4_only_treatment_cluster_custom_genes.pdf"))
+dev.off()
+
+
+# secondly, cluster sep only
+
+# aggregate expression for heatmap visualisation
+DefaultAssay(day4.seurat) <- "SCT"
+pseudo.cd45pos <- AggregateExpression(day4.seurat,
+                                      assays = "SCT",
+                                      return.seurat = TRUE, 
+                                      group.by = c("cell_type"))
+
+
+###################
+# Plot heatmap
+###################
+
+DoHeatmap(pseudo.cd45pos, 
+          features = custom.genes, 
+          draw.lines = FALSE, 
+          angle = 90,
+          raster = FALSE) + 
+ggplot2::scale_fill_gradient2(low = "blue",
+                              high = "red2")
+
+dev.copy(pdf, paste0(output.dir, "Heatmap_pseudobulk_Day_4_only_cluster_custom_genes.pdf"))
+dev.off()
+
+
+```
+
+
+### Dot plots of select GO terms
+```{r Dotplots_GO_terms}
+
+###################################################################################################################################################
+#4. Dotplots for GO terms Neutrophils, monocytes, macrophages and DCs 
+###################################################################################################################################################
+
+# firstly calculate DEGs treatment-wise - this is redone as this object is just Day 4 and no basophils
+
+if(long.compute){
+  
+  
+  day4.seurat <- PrepSCTFindMarkers(day4.seurat)
+  
+  # set assay
+  DefaultAssay(day4.seurat) <- "SCT"
+  
+  
+  
+  # add annotation for treatment 
+  day4.seurat@meta.data$Treatment_cluster <- paste0(day4.seurat@meta.data$Treatment, "_", day4.seurat@meta.data$cell_type)
+  
+  # set Idents
+  Idents(day4.seurat) <- "Treatment_cluster"
+  
+  
+  cluster.ids <- unique(day4.seurat@meta.data$cell_type)
+  
+  # create list to store output
+  DEG.list <- list()
+  
+  # run through DEG specifically between vehicle and treatment for each cluster 
+  
+  for(i in seq_along(cluster.ids)){
+    temp.de <- FindMarkers(day4.seurat,
+                           assay = "SCT",
+                           ident.1 = paste0("PDS_", cluster.ids[i]),
+                           ident.2 = paste0("Vehicle_", cluster.ids[i]),
+                           only.pos = FALSE, 
+                           recorrect_umi = FALSE,
+                           verbose = TRUE)
+    
+    DEG.list[[i]] <- temp.de
+    
+    # save to file 
+    write.csv(temp.de, paste0(output.dir, "DEGs_PDS_", cluster.ids[i], "_vs_Vehicle_", cluster.ids[i], ".csv"))
+    
+    
+  }
+  # add names to DEG.list
+  names(DEG.list) <- cluster.ids
+  
+  # save DEG list to file 
+  saveRDS(DEG.list, paste0(output.dir, "DEG_list_object_day4_no_Baso.rds"))
+  
+  
+}else{
+  
+  DEG.list <- readRDS(paste0(output.dir, "DEG_list_object_day4_no_Baso.rds"))
+  
+}
+
+
+########################
+# Set up enrichr params
+########################
+
+# load library
+library("enrichR")
+library("clusterProfiler")
+library("dplyr")
+library("ggplot2")
+library("scales")  # For the log transformation and labels
+
+# set variables
+enrichR::setEnrichrSite(site = "Enrichr")
+
+dbs <- enrichR::listEnrichrDbs()
+dbs <- sort(dbs$libraryName)
+
+
+# Choose the dataset to query against.
+dbs_use <- c("GO_Biological_Process_2021", "KEGG_2019_Mouse")
+
+
+##############
+# Functions 
+##############
+# Define the function
+filter_terms <- function(data, go_terms, group_name, prefix = "") {
+  # Perform the filtering and mutation
+  result <- data %>%
+    dplyr::select(c(Term, Overlap, Adjusted.P.value, Odds.Ratio, Combined.Score)) %>%
+    filter(grepl(paste(go_terms, collapse = "|"), Term, ignore.case = TRUE)) %>%
+    mutate(Term = paste0(prefix, Term), 
+           group = group_name)
+  
+  print(result)
+  return(result)
+}
+
+
+process_data <- function(input.1, input.2, input.3, input.4, pval_threshold = 0.05){
+  
+  # join up and down term tables together
+  combined.term.table <- bind_rows(input.1, input.2, input.3, input.4)
+  
+  # additional formatting of dataframe 
+  combined.term.table <- combined.term.table %>%
+    mutate(Overlap_Ratio = as.numeric(sub("/.*", "", Overlap)) / as.numeric(sub(".*/", "", Overlap))) %>% # Create overlap ratio
+    mutate(color_value = ifelse(Adjusted.P.value > pval_threshold, NA, Combined.Score)) %>% # create new column so that in.sig values are greyed out
+    mutate(color_value_log = log1p(color_value)) # Using log1p to handle zero values
+  
+  # Reorder the 'group' factor levels
+  combined.term.table$group <- factor(combined.term.table$group, levels = c("PDS", "Vehicle"))
+  
+  # Order dataframe by group and combined score descending
+  combined.term.table <- combined.term.table %>%
+    arrange(group, desc(Combined.Score)) %>% 
+    mutate(Term_order = factor(Term, levels = unique(Term)))
+  
+  return(combined.term.table)
+  
+}
+
+plot_all <- function(term.table, title.var = " Ontology Terms", save.path, width.var = 12, height.var = 8){
+  
+  p1 <- ggplot(term.table, aes(x = group, y = Term_order, size = Overlap_Ratio)) +
+    geom_point(aes(color = color_value_log), na.rm = TRUE) +
+    scale_color_gradient(low = "blue", high = "red", na.value = "gray",
+                         name = "Combined Score",
+                         labels = scales::label_log()) +  # Apply log scale labels
+    scale_size_continuous(range = c(0, 10)) +  # Adjust range to enhance size difference
+    scale_y_discrete(limits = rev) +  # Reverse the order of the y-axis
+    theme_minimal() +
+    labs(title = title.var, x = "Treatment group (Day 4)", y = NULL)
+  print(p1)
+  ggsave(save.path, p1, width = width.var, height = height.var)
+  
+}
+
+plot_pds_sig <- function(term.table, title.var = "", pval_threshold = 0.05, save.path, width.var = 12, height.var = 8){
+  
+  
+  # Filter significant pathways in the PDS group
+  significant_pds_terms <- term.table %>%
+    filter(group == "PDS" & Adjusted.P.value < pval_threshold) %>%
+    pull(Term)  # Extract terms as a vector
+  
+  # Filter the combined table to keep significant terms in PDS and all terms in Vehicle group
+  filtered_combined_table <- term.table %>%
+    filter(Term %in% significant_pds_terms)
+  
+  
+  p1 <- ggplot(filtered_combined_table, aes(x = group, y = Term_order, size = Overlap_Ratio)) +
+    geom_point(aes(color = color_value_log), na.rm = TRUE) +
+    scale_color_gradient(low = "blue", high = "red", na.value = "gray",
+                         name = "Combined Score",
+                         labels = scales::label_log()) +  # Apply log scale labels
+    scale_size_continuous(range = c(0, 10)) +  # Adjust range to enhance size difference
+    scale_y_discrete(limits = rev) +  # Reverse the order of the y-axis
+    theme_minimal() +
+    labs(title = title.var, x = "Treatment group (Day 4)", y = NULL)
+  
+  print(p1)
+  ggsave(save.path, p1, width = width.var, height = height.var)
+  
+}
+
+
+##################
+#a. Neutrophils: 
+##################
+
+# subset seurat object for cell_type in question
+DefaultAssay(day4.seurat) <- "SCT"
+
+Idents(day4.seurat) <- day4.seurat@meta.data$cell_type
+Neutrophil.seurat <- subset(day4.seurat, idents = "Neutrophils")
+table(Neutrophil.seurat@meta.data$Treatment)
+Idents(Neutrophil.seurat) <- Neutrophil.seurat@meta.data$Treatment
+
+# calculate enrichment
+
+# filter for upregulated genes
+up.genes <- DEG.list$Neutrophils %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0) %>% 
+  rownames()
+
+dn.genes <- DEG.list$Neutrophils %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC < 0) %>% 
+  rownames()
+
+
+# Retrieve the enriched terms.
+up.enriched.terms <- enrichR::enrichr(up.genes, dbs_use)
+dn.enriched.terms <- enrichR::enrichr(dn.genes, dbs_use)
+
+# Filter GO output for plotting and based on terms Nils would like to highlight
+
+# Neutrophil GO-BP terms 
+GO.terms <- c("cytokine-mediated signaling pathway", "neutrophil degranulation", "neutrophil mediated immunity", "cellular response to type I interferon", 
+                         "phagosome acidification", "phagosome maturation", "translation", "gene expression", "ribosome biogenesis")
+GO.terms <- paste0("^", GO.terms, " ")
+
+length(GO.terms)
+
+PDS.go <- filter_terms(up.enriched.terms$GO_Biological_Process_2021,
+                       go_terms = GO.terms,
+                       group_name = "PDS")
+
+Vehcile.go <- filter_terms(dn.enriched.terms$GO_Biological_Process_2021,
+                           go_terms = GO.terms,
+                           group_name = "Vehicle")
+
+# Neutrophil KEGG terms 
+KEGG.terms <- c("Lysosome", "Phagosome", "NOD-like receptor signaling pathway", "Apoptosis", "NF-kappa B signaling pathway", "TNF signaling pathway",
+                "Antigen processing and presentation", "RIG-I-like receptor signaling pathway", "Ribosome", "Oxidative phosphorylation")
+KEGG.terms <- paste0("^", KEGG.terms, "$")
+length(KEGG.terms)
+
+PDS.kegg <- filter_terms(up.enriched.terms$KEGG_2019_Mouse,
+                         go_terms = KEGG.terms,
+                         group_name = "PDS", 
+                         prefix = "KEGG: ")
+
+Vehcile.kegg <- filter_terms(dn.enriched.terms$KEGG_2019_Mouse,
+                             go_terms = KEGG.terms,
+                             group_name = "Vehicle", 
+                             prefix = "KEGG: ")
+
+term.table.out <- process_data(PDS.go, PDS.kegg, Vehcile.go, Vehcile.kegg)
+
+plot_all(term.table = term.table.out,
+         title.var = "Neutrophils PDS vs. Vehicle",
+         save.path = paste0(output.dir, "Day4_Neutrophils_PDS_vs_Vehcile_select_GOs.pdf"))
+
+plot_pds_sig(term.table = term.table.out, 
+             title.var = "Neutrophils PDS vs. Vehicle",
+             save.path = paste0(output.dir, "Day4_Neutrophils_PDS_vs_Vehcile_select_PDS_sig_GOs.pdf"))
+
+##################
+#b. Monocytes: 
+##################
+
+# subset seurat object for cell_type in question
+DefaultAssay(day4.seurat) <- "SCT"
+
+Idents(day4.seurat) <- day4.seurat@meta.data$cell_type
+Monocytes.seurat <- subset(day4.seurat, idents = "Monocytes")
+table(Monocytes.seurat@meta.data$Treatment)
+Idents(Monocytes.seurat) <- Monocytes.seurat@meta.data$Treatment
+
+# calculate enrichment
+
+# filter for upregulated genes
+up.genes <- DEG.list$Monocytes %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0) %>% 
+  rownames()
+
+dn.genes <- DEG.list$Monocytes %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC < 0) %>% 
+  rownames()
+
+
+# Retrieve the enriched terms.
+up.enriched.terms <- enrichR::enrichr(up.genes, dbs_use)
+dn.enriched.terms <- enrichR::enrichr(dn.genes, dbs_use)
+
+# Filter GO output for plotting and based on terms Nils would like to highlight
+
+# Monocytes GO-BP terms 
+GO.terms <- c("cytokine-mediated signaling pathway", "inflammatory response", "positive regulation of inflammatory response",
+              "cellular response to type I interferon", "positive regulation of cytokine production", "translation", "gene expression", "ribosome biogenesis")
+GO.terms <- paste0("^", GO.terms, " ")
+
+length(GO.terms)
+
+PDS.go <- filter_terms(up.enriched.terms$GO_Biological_Process_2021,
+                       go_terms = GO.terms,
+                       group_name = "PDS")
+
+Vehcile.go <- filter_terms(dn.enriched.terms$GO_Biological_Process_2021,
+                           go_terms = GO.terms,
+                           group_name = "Vehicle")
+
+# Monocytes KEGG terms 
+KEGG.terms <- c("Lysosome", "Phagosome", "NOD-like receptor signaling pathway", "Apoptosis", "Toll-like receptor signaling pathway", "TNF signaling pathway",
+                "Ribosome", "Oxidative phosphorylation")
+KEGG.terms <- paste0("^", KEGG.terms, "$")
+length(KEGG.terms)
+
+
+PDS.kegg <- filter_terms(up.enriched.terms$KEGG_2019_Mouse,
+                         go_terms = KEGG.terms,
+                         group_name = "PDS", 
+                         prefix = "KEGG: ")
+
+Vehcile.kegg <- filter_terms(dn.enriched.terms$KEGG_2019_Mouse,
+                             go_terms = KEGG.terms,
+                             group_name = "Vehicle", 
+                             prefix = "KEGG: ")
+
+term.table.out <- process_data(PDS.go, PDS.kegg, Vehcile.go, Vehcile.kegg)
+
+plot_all(term.table = term.table.out,
+         title.var = "Monocytes PDS vs. Vehicle",
+         save.path = paste0(output.dir, "Day4_Monocytes_PDS_vs_Vehcile_select_GOs.pdf"))
+
+plot_pds_sig(term.table = term.table.out, 
+             title.var = "Monocytes PDS vs. Vehicle",
+             save.path = paste0(output.dir, "Day4_Monocytes_PDS_vs_Vehcile_select_PDS_sig_GOs.pdf"))
+
+
+
+
+##################
+#b. Macrophages: 
+##################
+
+# subset seurat object for cell_type in question
+DefaultAssay(day4.seurat) <- "SCT"
+
+Idents(day4.seurat) <- day4.seurat@meta.data$cell_type
+Macrophages.seurat <- subset(day4.seurat, idents = "Macrophages")
+table(Macrophages.seurat@meta.data$Treatment)
+Idents(Macrophages.seurat) <- Macrophages.seurat@meta.data$Treatment
+
+# calculate enrichment
+
+# filter for upregulated genes
+up.genes <- DEG.list$Macrophages %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0) %>% 
+  rownames()
+
+dn.genes <- DEG.list$Macrophages %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC < 0) %>% 
+  rownames()
+
+
+# Retrieve the enriched terms.
+up.enriched.terms <- enrichR::enrichr(up.genes, dbs_use)
+dn.enriched.terms <- enrichR::enrichr(dn.genes, dbs_use)
+
+# Filter GO output for plotting and based on terms Nils would like to highlight
+
+# Macrophages GO-BP terms 
+GO.terms <- c("cytokine-mediated signaling pathway", "regulation of inflammatory response", "inflammatory response", "toll-like receptor signaling pathway", 
+              "pattern recognition receptor signaling pathway", "cellular response to Interleukin-1", "translation", "gene expression", "ribosome biogenesis")
+GO.terms <- paste0("^", GO.terms, " ")
+
+length(GO.terms)
+
+PDS.go <- filter_terms(up.enriched.terms$GO_Biological_Process_2021,
+                       go_terms = GO.terms,
+                       group_name = "PDS")
+
+Vehcile.go <- filter_terms(dn.enriched.terms$GO_Biological_Process_2021,
+                           go_terms = GO.terms,
+                           group_name = "Vehicle")
+
+# Macrophages KEGG terms 
+KEGG.terms <- c("Lysosome", "Phagosome", "NOD-like receptor signaling pathway", "Apoptosis", "Toll-like receptor signaling pathway", "TNF signaling pathway",
+                "Antigen processing and presentation", "Ribosome", "Oxidative phosphorylation")
+KEGG.terms <- paste0("^", KEGG.terms, "$")
+length(KEGG.terms)
+
+
+PDS.kegg <- filter_terms(up.enriched.terms$KEGG_2019_Mouse,
+                         go_terms = KEGG.terms,
+                         group_name = "PDS", 
+                         prefix = "KEGG: ")
+
+Vehcile.kegg <- filter_terms(dn.enriched.terms$KEGG_2019_Mouse,
+                             go_terms = KEGG.terms,
+                             group_name = "Vehicle", 
+                             prefix = "KEGG: ")
+
+term.table.out <- process_data(PDS.go, PDS.kegg, Vehcile.go, Vehcile.kegg)
+
+plot_all(term.table = term.table.out,
+         title.var = "Macrophages PDS vs. Vehicle",
+         save.path = paste0(output.dir, "Day4_Macrophages_PDS_vs_Vehcile_select_GOs.pdf"))
+
+plot_pds_sig(term.table = term.table.out, 
+             title.var = "Macrophages PDS vs. Vehicle",
+             save.path = paste0(output.dir, "Day4_Macrophages_PDS_vs_Vehcile_select_PDS_sig_GOs.pdf"))
+
+
+
+##################
+# DCs: 
+##################
+
+# subset seurat object for cell_type in question
+DefaultAssay(day4.seurat) <- "SCT"
+
+Idents(day4.seurat) <- day4.seurat@meta.data$cell_type
+DC.seurat <- subset(day4.seurat, idents = "DC")
+table(DC.seurat@meta.data$Treatment)
+Idents(DC.seurat) <- DC.seurat@meta.data$Treatment
+
+# calculate enrichment
+
+# filter for upregulated genes
+up.genes <- DEG.list$DC %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0) %>% 
+  rownames()
+
+dn.genes <- DEG.list$DC %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC < 0) %>% 
+  rownames()
+
+
+# Retrieve the enriched terms.
+up.enriched.terms <- enrichR::enrichr(up.genes, dbs_use)
+dn.enriched.terms <- enrichR::enrichr(dn.genes, dbs_use)
+
+# Filter GO output for plotting and based on terms Nils would like to highlight
+
+# DC GO-BP terms 
+GO.terms <- c("cytokine-mediated signaling pathway", "inflammatory response", "cellular response to Interleukin-1", "positive regulation of inflammatory response", "positive regulation of cytokine production", "ribosome biogenesis", "translation", "gene expression")
+GO.terms <- paste0("^", GO.terms, " ")
+
+length(GO.terms)
+
+PDS.go <- filter_terms(up.enriched.terms$GO_Biological_Process_2021,
+                       go_terms = GO.terms,
+                       group_name = "PDS")
+
+Vehcile.go <- filter_terms(dn.enriched.terms$GO_Biological_Process_2021,
+                           go_terms = GO.terms,
+                           group_name = "Vehicle")
+
+# DC KEGG terms 
+KEGG.terms <- c("Phagosome", "NOD-like receptor signaling pathway", "Apoptosis", "Toll-like receptor signaling pathway", "TNF signaling pathway",
+                "NF-kappa B signaling pathway", "RIG-I-like receptor signaling pathway", "Ribosome", "Oxidative phosphorylation")
+KEGG.terms <- paste0("^", KEGG.terms, "$")
+length(KEGG.terms)
+
+PDS.kegg <- filter_terms(up.enriched.terms$KEGG_2019_Mouse,
+                         go_terms = KEGG.terms,
+                         group_name = "PDS", 
+                         prefix = "KEGG: ")
+
+Vehcile.kegg <- filter_terms(dn.enriched.terms$KEGG_2019_Mouse,
+                             go_terms = KEGG.terms,
+                             group_name = "Vehicle", 
+                             prefix = "KEGG: ")
+
+term.table.out <- process_data(PDS.go, PDS.kegg, Vehcile.go, Vehcile.kegg)
+
+plot_all(term.table = term.table.out,
+         title.var = "DC PDS vs. Vehicle",
+         save.path = paste0(output.dir, "Day4_DC_PDS_vs_Vehcile_select_GOs.pdf"))
+
+plot_pds_sig(term.table = term.table.out, 
+             title.var = "DC PDS vs. Vehicle",
+             save.path = paste0(output.dir, "Day4_DC_PDS_vs_Vehcile_select_PDS_sig_GOs.pdf"))
+
+
+
+
+# Calculate the min and max adjusted p-values below the threshold
+#pval_min <- min(combined.term.table$color_value, na.rm = TRUE)
+#pval_max <- max(combined.term.table$color_value, na.rm = TRUE)
+
+```
+

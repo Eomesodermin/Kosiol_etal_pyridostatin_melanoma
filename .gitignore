@@ -17,6 +17,8 @@
 
 #ignore output 
 results/**/**
+archive/**/**
+SCEVAN_output/**/**
 
 # ignore input data 
 data/**/**
