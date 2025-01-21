@@ -787,3 +787,178 @@ plot_pds_sig(term.table = term.table.out,
 
 ```
 
+
+### Searching neutrophil cluster for overlap with Benguigui et al Cancer cell
+```{r temp}
+
+
+
+# create output dir
+output.dir <- paste0("results/temp_plots/")
+
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, 
+             recursive = T)
+  
+}
+
+
+Idents(CD45pos.seurat) <- CD45pos.seurat@meta.data$cell_type
+Neutrophil.seurat <- subset(CD45pos.seurat, idents = "Neutrophils")
+
+Neutrophil.seurat <- FindNeighbors(Neutrophil.seurat, 
+                             dims = 1:30,
+                             reduction = "integrated.cca.sct")
+
+Neutrophil.seurat <- FindClusters(Neutrophil.seurat, 
+                            resolution = 1.5, 
+                            cluster.name = "clusters_cca_sct")
+
+Neutrophil.seurat <- RunUMAP(Neutrophil.seurat, 
+                       reduction = "integrated.cca.sct",
+                       dims = 1:30, 
+                       reduction.name = "umap.cca.sct")
+
+
+
+p1 <- scCustomize::DimPlot_scCustom(Neutrophil.seurat,
+                                    reduction = "umap.cca.sct", 
+                                    label = TRUE,
+                                    figure_plot = TRUE,
+                                    group.by = "seurat_clusters", 
+                                    pt.size = 1)
+
+p2 <- scCustomize::Plot_Density_Custom(Neutrophil.seurat, 
+                                       features = "Ly6e",
+                                       reduction = "umap.cca.sct")
+
+p3 <- scCustomize::FeaturePlot_scCustom(Neutrophil.seurat, 
+                                        features = "Ly6e",
+                                        reduction = "umap.cca.sct")
+
+
+p1|p3
+
+# read in signature from paper and score cells by signature
+Benguigui.DEGs <- readxl::read_excel("data/Misc/Benguigui_etal_2024/1-s2.0-S1535610823004336-mmc2.xlsx", sheet = 1)
+
+Resp.Neutrophils <- Benguigui.DEGs %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0)
+Resp.Neutrophils.sig <- Resp.Neutrophils$...1
+Resp.Neutrophils.sig <- unique(Resp.Neutrophils.sig)
+
+
+NonResp.Neutrophils <- Benguigui.DEGs %>%
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC < 0)
+NonResp.Neutrophils.sig <- NonResp.Neutrophils$...1
+NonResp.Neutrophils.sig <- unique(NonResp.Neutrophils.sig)
+
+
+Neutrophil.seurat <- AddModuleScore(Neutrophil.seurat, 
+                                 features = list(Responding_Neutrophils = Resp.Neutrophils.sig, 
+                                                 NonResponding_Neutrophils = NonResp.Neutrophils.sig),
+                                 nbin = 20,
+                                 name = c("Responding_Neutrophils_sig", "NonResponding_Neutrophils_sig"))
+
+head(Neutrophil.seurat@meta.data)
+
+# quick look
+VlnPlot_scCustom(Neutrophil.seurat, 
+                 features = c("Responding_Neutrophils_sig1", "NonResponding_Neutrophils_sig2"),
+                 group.by = "seurat_clusters")
+
+dev.copy(pdf, paste0(output.dir, "temp_neutrophil_sig_score.pdf"))
+dev.off()
+
+
+# with pos and neg integrated 
+
+  cores <- parallel::detectCores(all.tests = FALSE, logical = TRUE)
+  
+    Resp.Neutrophils.sig <- paste0(Resp.Neutrophils.sig, "+")
+
+  NonResp.Neutrophils.sig <- paste0(NonResp.Neutrophils.sig, "-")
+
+  
+  
+Signature.list <- list(Neutrophil.sig = c(Resp.Neutrophils.sig, NonResp.Neutrophils.sig))
+
+signature.names <- paste0(names(Signature.list), "_UCell")
+
+  
+  # Calculate Ucell scores for signatures
+  Neutrophil.seurat <- UCell::AddModuleScore_UCell(Neutrophil.seurat,
+                                            features = Signature.list,
+                                            ncores = cores)
+  
+head(Neutrophil.seurat@meta.data)
+
+# Type 1 Signature
+v1 <- VlnPlot_scCustom(Neutrophil.seurat, 
+        features = "Neutrophil.sig_UCell",
+       group.by = "seurat_clusters",
+        pt.size = 0) + 
+  NoLegend()
+
+p1|v1
+
+dev.copy(pdf, paste0(output.dir, "temp_neutrophil_Uscore.pdf"))
+dev.off()
+
+
+
+ggplot2_switch_version(desired_version = "3.4.4")
+
+
+d1 <- scCustomize::Plot_Density_Custom(Neutrophil.seurat, 
+                                       features = "Neutrophil.sig_UCell",
+                                       reduction = "umap.cca.sct")
+
+p1|d1
+
+dev.copy(pdf, paste0(output.dir, "temp_neutrophil_density.pdf"))
+dev.off()
+
+
+f1 <- scCustomize::FeaturePlot_scCustom(Neutrophil.seurat, 
+                                        features = "Neutrophil.sig_UCell",
+                                        reduction = "umap.cca.sct")
+
+p1|f1
+dev.copy(pdf, paste0(output.dir, "temp_neutrophil_feature_score.pdf"))
+dev.off()
+
+
+# plots to demonstrate signature enrichment 
+
+# Pseudobulk for vis
+pseudo.seurat <- AggregateExpression(Neutrophil.seurat,
+                                     assays = "RNA",
+                                     return.seurat = TRUE, 
+                                     group.by = c("seurat_clusters"))
+
+
+Idents(pseudo.seurat) <- "seurat_clusters"
+pseudo.seurat <- ScaleData(pseudo.seurat)
+
+DoHeatmap(pseudo.seurat, 
+          features = Resp.Neutrophils.sig, 
+          draw.lines = FALSE, 
+          raster = FALSE) + 
+  scico::scale_fill_scico(palette = "batlow", 
+                          direction = 1, 
+                          na.value = "white")
+
+dev.copy(pdf, paste0(output.dir, "temp_neutrophil_heatmap.pdf"))
+dev.off()
+
+Idents(Neutrophil.seurat) <- Neutrophil.seurat@meta.data$Time
+temp <- subset(Neutrophil.seurat, idents = "Day4")
+table(temp@meta.data$seurat_clusters, temp@meta.data$Treatment)
+
+
+
+
+```
