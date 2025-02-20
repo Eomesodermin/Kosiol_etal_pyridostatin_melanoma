@@ -23,7 +23,7 @@ The repository contains the following top-level directories:
 
 - **`data/`** _(ignored by Git)_  
   - Contains output from `cellranger`  
-  - Will be uploaded to Zenodo for accessibility.
+  - Will be uploaded to Zenodo for accessibility. (already on zenodo)
 
 - **`results/`** _(ignored by Git)_  
   - Stores processed analysis results.  
@@ -31,7 +31,7 @@ The repository contains the following top-level directories:
 
 - **`saves/`** _(ignored by Git)_  
   - Contains intermediate objects such as Seurat objects.  
-  - These files will also be uploaded to Zenodo.
+  - These files will also be uploaded to Zenodo. (already on zenodo)
 
 - **`scripts/`**  
   - Includes all analysis and processing scripts.
