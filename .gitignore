@@ -55,3 +55,15 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj.user
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
