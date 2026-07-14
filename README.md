@@ -1,5 +1,7 @@
 # Pyridostatin + checkpoint blockade in B16 melanoma — single-cell RNA-seq
 
+> **Status:** unpublished work — if you use this analysis, please cite this repository (see [`CITATION.cff`](CITATION.cff)).
+
 Single-cell RNA-seq analysis for the study *"Stabilizing G-quadruplexes with pyridostatin in
 murine melanoma augments response to checkpoint blockade by modulation of the tumor
 microenvironment."*
