@@ -15,3 +15,10 @@ CellRanger output and processed objects are archived on **Zenodo** (see reposito
 
 ---
 Analysis by **Dillon Corvino** · [GitHub](https://github.com/Eomesodermin) · [dilloncorvino.com](https://dilloncorvino.com)
+
+## Data availability
+
+Processed data (CellRanger matrices, analysis outputs, and Seurat objects) are archived on Zenodo:
+**https://doi.org/10.5281/zenodo.21391578** (restricted access until publication).
+Raw sequencing reads will be deposited to ENA. Download the processed data from Zenodo into
+`data/` and `saves/` to run the analysis.
