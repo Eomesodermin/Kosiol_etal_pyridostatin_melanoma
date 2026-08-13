@@ -26,7 +26,7 @@ knitr::opts_chunk$set(
   message = FALSE,
   warning = FALSE,
   eval = TRUE,
-  tidy = TRUE
+  tidy = FALSE
 )
 
 rm(list = ls())
@@ -34,18 +34,25 @@ cat("\014")
 gc()
 
 # Establish working directory
-library("rstudioapi")
-setwd(dirname(getActiveDocumentContext()$path))
-setwd("..")
-
-# Create output directories
-output.dir <- "results/Supplementary_Figure_2/"
-if(!dir.exists(output.dir)){
-  dir.create(output.dir, recursive = TRUE)
+# Use knitr current_input for headless/RStudio compatibility
+if (!is.null(knitr::current_input())) {
+  setwd(dirname(knitr::current_input()))
+  setwd("..")
 }
 
-# Load custom functions from Setup.R (includes LoadSeuratRds)
-source("scripts/Setup.R")
+# Create output directories with absolute paths (for knitr working directory changes)
+output.base <- normalizePath("../results/Supplementary_Figure_2/", mustWork = FALSE)
+if(!dir.exists(dirname(output.base))){
+  dir.create(dirname(output.base), recursive = TRUE)
+}
+if(!dir.exists(output.base)){
+  dir.create(output.base, recursive = TRUE)
+}
+
+# Define LoadSeuratRds function
+LoadSeuratRds <- function(file) {
+  readRDS(file)
+}
 
 # Load libraries
 library(Seurat)
@@ -55,6 +62,8 @@ library(ggplot2)
 library(scCustomize)
 library(SeuratExtend)
 library(tidyr)
+library(pheatmap)
+library(RColorBrewer)
 
 # Load preprocessed Seurat objects from saves/
 # Data should be downloaded from Zenodo (https://doi.org/10.5281/zenodo.21391578) into saves/
@@ -164,39 +173,41 @@ pseudo.myeloid <- AggregateExpression(
   return.seurat = FALSE,
   group.by = c("cell_type", "Treatment")
 )
+pseudo.myeloid <- pseudo.myeloid$SCT
 
 # Keep only ISG genes present in dataset
 isg.present <- intersect(isg.genes, rownames(pseudo.myeloid))
-pseudo.myeloid <- pseudo.myeloid[isg.present, ]
+pseudo.myeloid <- pseudo.myeloid[isg.present, , drop = FALSE]
 
 cat("ISG genes present in myeloid:", nrow(pseudo.myeloid), "/", length(isg.genes), "\n")
 
-# Convert to Seurat object for DoHeatmap compatibility
-pseudo.myeloid.seurat <- CreateSeuratObject(pseudo.myeloid)
+# Normalize and visualize heatmap
+pseudo.myeloid.mat <- as.matrix(pseudo.myeloid)
+# Scale for better visualization, replace NaN/Inf with 0
+pseudo.myeloid.scaled <- t(scale(t(pseudo.myeloid.mat)))
+pseudo.myeloid.scaled[!is.finite(pseudo.myeloid.scaled)] <- 0
 
-# Plot heatmap
-p.isg.myeloid <- DoHeatmap(
-  pseudo.myeloid.seurat,
-  features = rownames(pseudo.myeloid),
-  group.by = "orig.ident",
-  draw.lines = TRUE,
-  size = 3
-) +
-  scale_fill_gradientn(
-    colors = c("blue", "white", "red"),
-    name = "SCT\nExpression"
-  ) +
-  theme(axis.text.y = element_text(size = 8))
+# Plot heatmap using pheatmap
+p.isg.myeloid <- pheatmap::pheatmap(
+  pseudo.myeloid.scaled,
+  main = "ISG Signature - Myeloid Cells",
+  fontsize_row = 8,
+  fontsize_col = 10,
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks = seq(-2, 2, length.out = 101),
+  border_color = NA,
+  cluster_cols = TRUE,
+  cluster_rows = TRUE
+)
 
 print(p.isg.myeloid)
 
-ggsave(
-  paste0(output.dir, "SupFig2a_ISG_heatmap_myeloid.pdf"),
-  p.isg.myeloid,
-  width = 10,
-  height = 12,
-  units = "in"
-)
+# Save PDF with absolute path
+pdf.file <- file.path(output.base, "SupFig2a_ISG_heatmap_myeloid.pdf")
+pdf(pdf.file, width = 10, height = 12)
+print(p.isg.myeloid)
+dev.off()
+cat("Saved:", pdf.file, "\n")
 ```
 
 #### CD45- (Panel b)
@@ -209,36 +220,35 @@ pseudo.cd45neg <- AggregateExpression(
   return.seurat = FALSE,
   group.by = c("cell_type", "Treatment")
 )
+pseudo.cd45neg <- pseudo.cd45neg$SCT
 
-# Keep only ISG genes present
-pseudo.cd45neg <- pseudo.cd45neg[isg.present, ]
+# Get ISG genes present (define locally for chunk scope)
+isg.present.local <- intersect(isg.genes, rownames(pseudo.cd45neg))
+pseudo.cd45neg <- pseudo.cd45neg[isg.present.local, , drop = FALSE]
 
-# Convert to Seurat object
-pseudo.cd45neg.seurat <- CreateSeuratObject(pseudo.cd45neg)
+# Scale and plot heatmap
+pseudo.cd45neg.mat <- as.matrix(pseudo.cd45neg)
+pseudo.cd45neg.scaled <- t(scale(t(pseudo.cd45neg.mat))); pseudo.cd45neg.scaled[!is.finite(pseudo.cd45neg.scaled)] <- 0
 
-# Plot heatmap
-p.isg.cd45neg <- DoHeatmap(
-  pseudo.cd45neg.seurat,
-  features = rownames(pseudo.cd45neg),
-  group.by = "orig.ident",
-  draw.lines = TRUE,
-  size = 3
-) +
-  scale_fill_gradientn(
-    colors = c("blue", "white", "red"),
-    name = "SCT\nExpression"
-  ) +
-  theme(axis.text.y = element_text(size = 8))
+p.isg.cd45neg <- pheatmap::pheatmap(
+  pseudo.cd45neg.scaled,
+  main = "ISG Signature - CD45- Cells",
+  fontsize_row = 8,
+  fontsize_col = 10,
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks = seq(-2, 2, length.out = 101),
+  border_color = NA
+)
 
 print(p.isg.cd45neg)
 
-ggsave(
-  paste0(output.dir, "SupFig2b_ISG_heatmap_CD45neg.pdf"),
-  p.isg.cd45neg,
+pdf(
+  paste0(output.base, "SupFig2b_ISG_heatmap_CD45neg.pdf"),
   width = 10,
-  height = 12,
-  units = "in"
+  height = 12
 )
+print(p.isg.cd45neg)
+dev.off()
 ```
 
 ### Panels c-d: ISG Module Scores
@@ -276,7 +286,7 @@ p.isg.vln.myeloid <- VlnPlot2(
 print(p.isg.vln.myeloid)
 
 ggsave(
-  paste0(output.dir, "SupFig2c_ISG_violin_myeloid.pdf"),
+  paste0(output.base, "SupFig2c_ISG_violin_myeloid.pdf"),
   p.isg.vln.myeloid,
   width = 12,
   height = 6,
@@ -317,7 +327,7 @@ p.isg.vln.cd45neg <- VlnPlot2(
 print(p.isg.vln.cd45neg)
 
 ggsave(
-  paste0(output.dir, "SupFig2d_ISG_violin_CD45neg.pdf"),
+  paste0(output.base, "SupFig2d_ISG_violin_CD45neg.pdf"),
   p.isg.vln.cd45neg,
   width = 10,
   height = 6,
@@ -341,35 +351,33 @@ pseudo.myeloid.cgas <- AggregateExpression(
   group.by = c("cell_type", "Treatment"),
   features = cgas.present
 )
+pseudo.myeloid.cgas <- pseudo.myeloid.cgas$SCT
 
 cat("cGAS genes present in myeloid:", nrow(pseudo.myeloid.cgas), "/", length(cgas.genes), "\n")
 
-# Convert to Seurat object for DoHeatmap
-pseudo.myeloid.cgas.seurat <- CreateSeuratObject(pseudo.myeloid.cgas)
+# Scale and plot heatmap
+pseudo.myeloid.cgas.mat <- as.matrix(pseudo.myeloid.cgas)
+pseudo.myeloid.cgas.scaled <- t(scale(t(pseudo.myeloid.cgas.mat))); pseudo.myeloid.cgas.scaled[!is.finite(pseudo.myeloid.cgas.scaled)] <- 0
 
-# Plot heatmap
-p.cgas.myeloid <- DoHeatmap(
-  pseudo.myeloid.cgas.seurat,
-  features = rownames(pseudo.myeloid.cgas),
-  group.by = "orig.ident",
-  draw.lines = TRUE,
-  size = 3
-) +
-  scale_fill_gradientn(
-    colors = c("blue", "white", "red"),
-    name = "SCT\nExpression"
-  ) +
-  theme(axis.text.y = element_text(size = 8))
+p.cgas.myeloid <- pheatmap::pheatmap(
+  pseudo.myeloid.cgas.scaled,
+  main = "cGAS/STING Signature - Myeloid Cells",
+  fontsize_row = 8,
+  fontsize_col = 10,
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks = seq(-2, 2, length.out = 101),
+  border_color = NA
+)
 
 print(p.cgas.myeloid)
 
-ggsave(
-  paste0(output.dir, "SupFig2e_cGAS_heatmap_myeloid.pdf"),
-  p.cgas.myeloid,
+pdf(
+  paste0(output.base, "SupFig2e_cGAS_heatmap_myeloid.pdf"),
   width = 10,
-  height = 10,
-  units = "in"
+  height = 10
 )
+print(p.cgas.myeloid)
+dev.off()
 ```
 
 #### CD45- (Panel f)
@@ -383,33 +391,31 @@ pseudo.cd45neg.cgas <- AggregateExpression(
   group.by = c("cell_type", "Treatment"),
   features = cgas.present
 )
+pseudo.cd45neg.cgas <- pseudo.cd45neg.cgas$SCT
 
-# Convert to Seurat object
-pseudo.cd45neg.cgas.seurat <- CreateSeuratObject(pseudo.cd45neg.cgas)
+# Scale and plot heatmap
+pseudo.cd45neg.cgas.mat <- as.matrix(pseudo.cd45neg.cgas)
+pseudo.cd45neg.cgas.scaled <- t(scale(t(pseudo.cd45neg.cgas.mat))); pseudo.cd45neg.cgas.scaled[!is.finite(pseudo.cd45neg.cgas.scaled)] <- 0
 
-# Plot heatmap
-p.cgas.cd45neg <- DoHeatmap(
-  pseudo.cd45neg.cgas.seurat,
-  features = rownames(pseudo.cd45neg.cgas),
-  group.by = "orig.ident",
-  draw.lines = TRUE,
-  size = 3
-) +
-  scale_fill_gradientn(
-    colors = c("blue", "white", "red"),
-    name = "SCT\nExpression"
-  ) +
-  theme(axis.text.y = element_text(size = 8))
+p.cgas.cd45neg <- pheatmap::pheatmap(
+  pseudo.cd45neg.cgas.scaled,
+  main = "cGAS/STING Signature - CD45- Cells",
+  fontsize_row = 8,
+  fontsize_col = 10,
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  breaks = seq(-2, 2, length.out = 101),
+  border_color = NA
+)
 
 print(p.cgas.cd45neg)
 
-ggsave(
-  paste0(output.dir, "SupFig2f_cGAS_heatmap_CD45neg.pdf"),
-  p.cgas.cd45neg,
+pdf(
+  paste0(output.base, "SupFig2f_cGAS_heatmap_CD45neg.pdf"),
   width = 10,
-  height = 10,
-  units = "in"
+  height = 10
 )
+print(p.cgas.cd45neg)
+dev.off()
 ```
 
 ### Panels g-h: cGAS/STING Module Scores
@@ -447,7 +453,7 @@ p.cgas.vln.myeloid <- VlnPlot2(
 print(p.cgas.vln.myeloid)
 
 ggsave(
-  paste0(output.dir, "SupFig2g_cGAS_violin_myeloid.pdf"),
+  paste0(output.base, "SupFig2g_cGAS_violin_myeloid.pdf"),
   p.cgas.vln.myeloid,
   width = 12,
   height = 6,
@@ -488,7 +494,7 @@ p.cgas.vln.cd45neg <- VlnPlot2(
 print(p.cgas.vln.cd45neg)
 
 ggsave(
-  paste0(output.dir, "SupFig2h_cGAS_violin_CD45neg.pdf"),
+  paste0(output.base, "SupFig2h_cGAS_violin_CD45neg.pdf"),
   p.cgas.vln.cd45neg,
   width = 10,
   height = 6,
@@ -499,7 +505,7 @@ ggsave(
 ## Summary
 ```{r summary}
 cat("=== Supplementary Figure 2 Complete ===\n")
-cat("Output directory:", output.dir, "\n")
+cat("Output directory:", output.base, "\n")
 cat("Panels generated:\n")
 cat("  a: ISG heatmap (myeloid cells, Vehicle vs PDS)\n")
 cat("  b: ISG heatmap (CD45- cells, Vehicle vs PDS)\n")
