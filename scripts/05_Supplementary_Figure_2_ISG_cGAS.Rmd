@@ -157,6 +157,58 @@ plot_pseudobulk_heatmap <- function(seu, features, group.by, col.order, title) {
 }
 ```
 
+### Helper: violin plot with Holm-adjusted significance stars
+```{r violin_helper}
+
+# VlnPlot2()'s built-in "p.signif" stars are always derived from the RAW
+# (unadjusted) p value, even when p.adjust.method = "holm" is supplied -
+# ggpubr computes p.adj internally but never uses it to pick the symbol.
+# To display Holm-adjusted stars we build the plot with stat.method = "none",
+# then reproduce VlnPlot2's internal statistics/annotation step ourselves
+# using p.adj instead of the raw p, including for the hide-non-significant
+# decision, and place brackets with the same helper VlnPlot2 uses internally.
+plot_violin_holm <- function(seu, feature, group.by, split.by, ylab, title,
+                              step.increase = 0.12, tip.length = 0.03) {
+  p <- VlnPlot2(
+    seu,
+    features = feature,
+    group.by = group.by,
+    split.by = split.by,
+    stat.method = "none",
+    pt = FALSE,
+    hide.outlier = TRUE
+  ) +
+    labs(title = title, y = ylab, x = "Cell Type")
+
+  scores <- p$data
+  group_by_arg <- if ("f2" %in% colnames(scores)) c("feature", "f") else "feature"
+  formula <- if ("f2" %in% colnames(scores)) value ~ f2 else value ~ f
+
+  stat.test <- ggpubr::compare_means(
+    formula, data = scores, method = "wilcox.test",
+    group.by = group_by_arg, p.adjust.method = "holm"
+  )
+
+  stat.test$p.adj.signif <- as.character(symnum(
+    stat.test$p.adj,
+    cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1),
+    symbols = c("****", "***", "**", "*", "ns")
+  ))
+  stat.test <- dplyr::filter(stat.test, p.adj.signif != "ns")
+
+  if (nrow(stat.test) == 0) {
+    message("No comparisons significant after Holm adjustment for: ", title)
+    return(p)
+  }
+
+  stat.test$groups <- apply(stat.test, 1, function(x) c(x[["group1"]], x[["group2"]]), simplify = FALSE)
+  stat.test <- SeuratExtend:::vlnplot2_Stat_add_y(stat.test, scores = scores, step.increase = step.increase)
+  stat.test$annotation <- stat.test$p.adj.signif
+
+  p + ggpubr::stat_pvalue_manual(stat.test, label = "annotation", tip.length = tip.length)
+}
+```
+
 ## Supplementary Figure 2: ISG Signature
 
 ### Panel a: ISG heatmap - Myeloid
@@ -202,18 +254,10 @@ cd45pos.d4 <- AddModuleScore(
 cd45pos.d4$ISG_score <- cd45pos.d4$ISG1
 cd45pos.d4$ISG1 <- NULL
 
-p.isg.vln.myeloid <- VlnPlot2(
-  cd45pos.d4,
-  features = "ISG_score",
-  group.by = "cell_type",
-  split.by = "Treatment",
-  stat.method = "wilcox.test",
-  p.adjust.method = "holm",
-  label = "p.signif",
-  hide.ns = TRUE,
-  pt = FALSE
-) +
-  labs(title = "ISG Module Score - Myeloid Cells", y = "ISG Score", x = "Cell Type")
+p.isg.vln.myeloid <- plot_violin_holm(
+  cd45pos.d4, "ISG_score", "cell_type", "Treatment",
+  "ISG Score", "ISG Module Score - Myeloid Cells"
+)
 
 ggsave(file.path(output.base, "SupFig2c_ISG_violin_myeloid.pdf"),
        p.isg.vln.myeloid, width = 10, height = 6, units = "in")
@@ -233,18 +277,10 @@ cd45neg.d4 <- AddModuleScore(
 cd45neg.d4$ISG_score <- cd45neg.d4$ISG1
 cd45neg.d4$ISG1 <- NULL
 
-p.isg.vln.cd45neg <- VlnPlot2(
-  cd45neg.d4,
-  features = "ISG_score",
-  group.by = "cell_type",
-  split.by = "Treatment",
-  stat.method = "wilcox.test",
-  p.adjust.method = "holm",
-  label = "p.signif",
-  hide.ns = TRUE,
-  pt = FALSE
-) +
-  labs(title = "ISG Module Score - Tumor & Fibroblasts", y = "ISG Score", x = "Cell Type")
+p.isg.vln.cd45neg <- plot_violin_holm(
+  cd45neg.d4, "ISG_score", "cell_type", "Treatment",
+  "ISG Score", "ISG Module Score - Tumor & Fibroblasts"
+)
 
 ggsave(file.path(output.base, "SupFig2d_ISG_violin_CD45neg.pdf"),
        p.isg.vln.cd45neg, width = 8, height = 6, units = "in")
@@ -296,18 +332,10 @@ cd45pos.d4 <- AddModuleScore(
 cd45pos.d4$cGAS_score <- cd45pos.d4$cGAS1
 cd45pos.d4$cGAS1 <- NULL
 
-p.cgas.vln.myeloid <- VlnPlot2(
-  cd45pos.d4,
-  features = "cGAS_score",
-  group.by = "cell_type",
-  split.by = "Treatment",
-  stat.method = "wilcox.test",
-  p.adjust.method = "holm",
-  label = "p.signif",
-  hide.ns = TRUE,
-  pt = FALSE
-) +
-  labs(title = "cGAS/STING Module Score - Myeloid Cells", y = "cGAS/STING Score", x = "Cell Type")
+p.cgas.vln.myeloid <- plot_violin_holm(
+  cd45pos.d4, "cGAS_score", "cell_type", "Treatment",
+  "cGAS/STING Score", "cGAS/STING Module Score - Myeloid Cells"
+)
 
 ggsave(file.path(output.base, "SupFig2g_cGAS_violin_myeloid.pdf"),
        p.cgas.vln.myeloid, width = 10, height = 6, units = "in")
@@ -327,18 +355,10 @@ cd45neg.d4 <- AddModuleScore(
 cd45neg.d4$cGAS_score <- cd45neg.d4$cGAS1
 cd45neg.d4$cGAS1 <- NULL
 
-p.cgas.vln.cd45neg <- VlnPlot2(
-  cd45neg.d4,
-  features = "cGAS_score",
-  group.by = "cell_type",
-  split.by = "Treatment",
-  stat.method = "wilcox.test",
-  p.adjust.method = "holm",
-  label = "p.signif",
-  hide.ns = TRUE,
-  pt = FALSE
-) +
-  labs(title = "cGAS/STING Module Score - Tumor & Fibroblasts", y = "cGAS/STING Score", x = "Cell Type")
+p.cgas.vln.cd45neg <- plot_violin_holm(
+  cd45neg.d4, "cGAS_score", "cell_type", "Treatment",
+  "cGAS/STING Score", "cGAS/STING Module Score - Tumor & Fibroblasts"
+)
 
 ggsave(file.path(output.base, "SupFig2h_cGAS_violin_CD45neg.pdf"),
        p.cgas.vln.cd45neg, width = 8, height = 6, units = "in")
