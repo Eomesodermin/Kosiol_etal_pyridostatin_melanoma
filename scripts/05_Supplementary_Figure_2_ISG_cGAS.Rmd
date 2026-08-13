@@ -1,0 +1,508 @@
+---
+title: "Supplementary Figure 2: ISG and cGAS/STING Module Scores"
+author: "Dillon Corvino"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+editor_options:
+  chunk_output_type: console
+---
+
+Built with R version `r getRversion()`
+
+## Setup {.tabset}
+
+### Environment
+```{r setup}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  eval = TRUE,
+  tidy = TRUE
+)
+
+rm(list = ls())
+cat("\014")
+gc()
+
+# Establish working directory
+library("rstudioapi")
+setwd(dirname(getActiveDocumentContext()$path))
+setwd("..")
+
+# Create output directories
+output.dir <- "results/Supplementary_Figure_2/"
+if(!dir.exists(output.dir)){
+  dir.create(output.dir, recursive = TRUE)
+}
+
+# Load libraries
+library(Seurat)
+library(SeuratObject)
+library(dplyr)
+library(ggplot2)
+library(scCustomize)
+library(SeuratExtend)
+library(tidyr)
+
+# Load data from Desktop
+cd45pos.seurat <- readRDS("/Users/dilloncorvino/Desktop/NILS_scRNAseq/Processed_files/Seurat_objects/CD45pos_seurat.rds")
+cd45neg.seurat <- readRDS("/Users/dilloncorvino/Desktop/NILS_scRNAseq/Processed_files/Seurat_objects/CD45neg_seurat.rds")
+
+cat("Data loaded. CD45pos:", dim(cd45pos.seurat), "| CD45neg:", dim(cd45neg.seurat), "\n")
+```
+
+### Gene Signatures
+```{r gene_signatures}
+
+# ISG panel: curated Type I interferon-stimulated genes
+isg.genes <- c(
+  # Core ISGs
+  "Isg15", "Ifit1", "Ifit2", "Ifit3", "Irf7", "Stat1", "Stat2", "Oas1a",
+  "Mx2", "Rsad2", "Usp18", "Ifi44", "Ifi44l", "Oasl1", "Gbp2", "Cxcl10",
+  # Canonical Hallmark ISGs
+  "Ifih1", "Ifi27", "Ifi27l2b", "Ifi30", "Ifi35", "Ifitm1", "Ifitm2", "Ifitm3",
+  "Isg20", "Ddx60", "Eif2ak2", "Ly6e", "Oas1g", "Parp12", "Parp14", "Rtp4",
+  # Pattern-recognition/signalling
+  "Ddx58", "Oas1b", "Oas2", "Oas3", "Oasl2"
+)
+
+# cGAS/STING signaling pathway genes
+cgas.genes <- c(
+  "Cgas", "Ifi204", "Ddx41", "Tmem173", "Tbk1", "Ikbke", "Irf3", "Irf7",
+  "Nfkb1", "Rela", "Trex1", "Enpp1", "Ifnb1", "Il6", "Tnf", "Cxcl10",
+  "Ccl2", "Ccl5", "Aim2", "Pycard", "Casp1"
+)
+
+cat("ISG panel:", length(isg.genes), "genes\n")
+cat("cGAS/STING panel:", length(cgas.genes), "genes\n")
+```
+
+### Prepare CD45+ (Myeloid) Subset
+```{r prepare_cd45pos}
+
+# Subset to Day 4 and keep only myeloid populations
+myeloid.keep <- c("DC", "Macrophages", "Monocytes", "Neutrophils")
+Idents(cd45pos.seurat) <- cd45pos.seurat@meta.data$Time
+cd45pos.d4 <- subset(cd45pos.seurat, idents = "Day4")
+
+Idents(cd45pos.d4) <- cd45pos.d4@meta.data$cell_type
+cd45pos.d4 <- subset(cd45pos.d4, idents = myeloid.keep)
+
+# Create combined metadata: CellType_Treatment
+cd45pos.d4$CellType_Treatment <- paste(
+  cd45pos.d4@meta.data$cell_type,
+  cd45pos.d4@meta.data$Treatment,
+  sep = "_"
+)
+
+# Set default assay and factor levels
+DefaultAssay(cd45pos.d4) <- "SCT"
+cd45pos.d4$Treatment <- factor(cd45pos.d4$Treatment, levels = c("Vehicle", "PDS"))
+cd45pos.d4$cell_type <- factor(cd45pos.d4$cell_type, levels = myeloid.keep)
+
+cat("CD45pos Day4 myeloid cells:", dim(cd45pos.d4), "\n")
+cat("Cell type breakdown:\n")
+print(table(cd45pos.d4$cell_type, cd45pos.d4$Treatment))
+```
+
+### Prepare CD45- (Tumor + Fibroblast) Subset
+```{r prepare_cd45neg}
+
+# Only Day 4 data in CD45neg
+DefaultAssay(cd45neg.seurat) <- "SCT"
+
+# Collapse tumor clusters into single "Tumor" category
+cd45neg.seurat$cell_type <- ifelse(
+  grepl("^Tumor", cd45neg.seurat$cluster_anno),
+  "Tumor",
+  cd45neg.seurat$cluster_anno
+)
+
+# Keep only Tumor and Fibroblasts
+cd45neg.d4 <- subset(cd45neg.seurat, subset = cell_type %in% c("Tumor", "Fibroblasts"))
+
+# Create combined metadata: CellType_Treatment
+cd45neg.d4$CellType_Treatment <- paste(
+  cd45neg.d4@meta.data$cell_type,
+  cd45neg.d4@meta.data$Treatment,
+  sep = "_"
+)
+
+# Set factor levels
+cd45neg.d4$Treatment <- factor(cd45neg.d4$Treatment, levels = c("Vehicle", "PDS"))
+cd45neg.d4$cell_type <- factor(cd45neg.d4$cell_type, levels = c("Tumor", "Fibroblasts"))
+
+cat("CD45neg Day4 tumor/fibroblast cells:", dim(cd45neg.d4), "\n")
+cat("Cell type breakdown:\n")
+print(table(cd45neg.d4$cell_type, cd45neg.d4$Treatment))
+```
+
+## Supplementary Figure 2: ISG Signature {.tabset}
+
+### Panel a-b: ISG Pseudobulk Heatmaps
+
+#### Myeloid (Panel a)
+```{r isg_heatmap_myeloid}
+
+# Pseudobulk aggregation by cell type and treatment
+pseudo.myeloid <- AggregateExpression(
+  cd45pos.d4,
+  assays = "SCT",
+  return.seurat = FALSE,
+  group.by = c("cell_type", "Treatment")
+)
+
+# Keep only ISG genes present in dataset
+isg.present <- intersect(isg.genes, rownames(pseudo.myeloid))
+pseudo.myeloid <- pseudo.myeloid[isg.present, ]
+
+cat("ISG genes present in myeloid:", nrow(pseudo.myeloid), "/", length(isg.genes), "\n")
+
+# Convert to Seurat object for DoHeatmap compatibility
+pseudo.myeloid.seurat <- CreateSeuratObject(pseudo.myeloid)
+
+# Plot heatmap
+p.isg.myeloid <- DoHeatmap(
+  pseudo.myeloid.seurat,
+  features = rownames(pseudo.myeloid),
+  group.by = "orig.ident",
+  draw.lines = TRUE,
+  size = 3
+) +
+  scale_fill_gradientn(
+    colors = c("blue", "white", "red"),
+    name = "SCT\nExpression"
+  ) +
+  theme(axis.text.y = element_text(size = 8))
+
+print(p.isg.myeloid)
+
+ggsave(
+  paste0(output.dir, "SupFig2a_ISG_heatmap_myeloid.pdf"),
+  p.isg.myeloid,
+  width = 10,
+  height = 12,
+  units = "in"
+)
+```
+
+#### CD45- (Panel b)
+```{r isg_heatmap_cd45neg}
+
+# Pseudobulk aggregation
+pseudo.cd45neg <- AggregateExpression(
+  cd45neg.d4,
+  assays = "SCT",
+  return.seurat = FALSE,
+  group.by = c("cell_type", "Treatment")
+)
+
+# Keep only ISG genes present
+pseudo.cd45neg <- pseudo.cd45neg[isg.present, ]
+
+# Convert to Seurat object
+pseudo.cd45neg.seurat <- CreateSeuratObject(pseudo.cd45neg)
+
+# Plot heatmap
+p.isg.cd45neg <- DoHeatmap(
+  pseudo.cd45neg.seurat,
+  features = rownames(pseudo.cd45neg),
+  group.by = "orig.ident",
+  draw.lines = TRUE,
+  size = 3
+) +
+  scale_fill_gradientn(
+    colors = c("blue", "white", "red"),
+    name = "SCT\nExpression"
+  ) +
+  theme(axis.text.y = element_text(size = 8))
+
+print(p.isg.cd45neg)
+
+ggsave(
+  paste0(output.dir, "SupFig2b_ISG_heatmap_CD45neg.pdf"),
+  p.isg.cd45neg,
+  width = 10,
+  height = 12,
+  units = "in"
+)
+```
+
+### Panels c-d: ISG Module Scores
+
+#### Myeloid Module Score (Panel c)
+```{r isg_module_score_myeloid}
+
+# Add ISG module score
+cd45pos.d4 <- AddModuleScore(
+  cd45pos.d4,
+  features = list(isg.present),
+  name = "ISG",
+  assay = "SCT"
+)
+
+# Rename score column for clarity
+cd45pos.d4$ISG_score <- cd45pos.d4$ISG1
+cd45pos.d4$ISG1 <- NULL
+
+# Violin plot with statistics
+p.isg.vln.myeloid <- VlnPlot2(
+  cd45pos.d4,
+  features = "ISG_score",
+  group.by = "cell_type",
+  split.by = "Treatment",
+  stat.method = "wilcox.test",
+  p.adjust.method = "holm",
+  label = "p.signif",
+  hide.ns = TRUE
+) +
+  labs(title = "ISG Module Score - Myeloid Cells",
+       y = "ISG Score",
+       x = "Cell Type")
+
+print(p.isg.vln.myeloid)
+
+ggsave(
+  paste0(output.dir, "SupFig2c_ISG_violin_myeloid.pdf"),
+  p.isg.vln.myeloid,
+  width = 12,
+  height = 6,
+  units = "in"
+)
+```
+
+#### CD45- Module Score (Panel d)
+```{r isg_module_score_cd45neg}
+
+# Add ISG module score
+cd45neg.d4 <- AddModuleScore(
+  cd45neg.d4,
+  features = list(isg.present),
+  name = "ISG",
+  assay = "SCT"
+)
+
+# Rename score column
+cd45neg.d4$ISG_score <- cd45neg.d4$ISG1
+cd45neg.d4$ISG1 <- NULL
+
+# Violin plot with statistics
+p.isg.vln.cd45neg <- VlnPlot2(
+  cd45neg.d4,
+  features = "ISG_score",
+  group.by = "cell_type",
+  split.by = "Treatment",
+  stat.method = "wilcox.test",
+  p.adjust.method = "holm",
+  label = "p.signif",
+  hide.ns = TRUE
+) +
+  labs(title = "ISG Module Score - Tumor & Fibroblasts",
+       y = "ISG Score",
+       x = "Cell Type")
+
+print(p.isg.vln.cd45neg)
+
+ggsave(
+  paste0(output.dir, "SupFig2d_ISG_violin_CD45neg.pdf"),
+  p.isg.vln.cd45neg,
+  width = 10,
+  height = 6,
+  units = "in"
+)
+```
+
+## Supplementary Figure 2: cGAS/STING Signature {.tabset}
+
+### Panels e-f: cGAS/STING Pseudobulk Heatmaps
+
+#### Myeloid (Panel e)
+```{r cgas_heatmap_myeloid}
+
+# Keep only cGAS genes present in dataset
+cgas.present <- intersect(cgas.genes, rownames(cd45pos.d4))
+pseudo.myeloid.cgas <- AggregateExpression(
+  cd45pos.d4,
+  assays = "SCT",
+  return.seurat = FALSE,
+  group.by = c("cell_type", "Treatment"),
+  features = cgas.present
+)
+
+cat("cGAS genes present in myeloid:", nrow(pseudo.myeloid.cgas), "/", length(cgas.genes), "\n")
+
+# Convert to Seurat object for DoHeatmap
+pseudo.myeloid.cgas.seurat <- CreateSeuratObject(pseudo.myeloid.cgas)
+
+# Plot heatmap
+p.cgas.myeloid <- DoHeatmap(
+  pseudo.myeloid.cgas.seurat,
+  features = rownames(pseudo.myeloid.cgas),
+  group.by = "orig.ident",
+  draw.lines = TRUE,
+  size = 3
+) +
+  scale_fill_gradientn(
+    colors = c("blue", "white", "red"),
+    name = "SCT\nExpression"
+  ) +
+  theme(axis.text.y = element_text(size = 8))
+
+print(p.cgas.myeloid)
+
+ggsave(
+  paste0(output.dir, "SupFig2e_cGAS_heatmap_myeloid.pdf"),
+  p.cgas.myeloid,
+  width = 10,
+  height = 10,
+  units = "in"
+)
+```
+
+#### CD45- (Panel f)
+```{r cgas_heatmap_cd45neg}
+
+# Pseudobulk for CD45neg
+pseudo.cd45neg.cgas <- AggregateExpression(
+  cd45neg.d4,
+  assays = "SCT",
+  return.seurat = FALSE,
+  group.by = c("cell_type", "Treatment"),
+  features = cgas.present
+)
+
+# Convert to Seurat object
+pseudo.cd45neg.cgas.seurat <- CreateSeuratObject(pseudo.cd45neg.cgas)
+
+# Plot heatmap
+p.cgas.cd45neg <- DoHeatmap(
+  pseudo.cd45neg.cgas.seurat,
+  features = rownames(pseudo.cd45neg.cgas),
+  group.by = "orig.ident",
+  draw.lines = TRUE,
+  size = 3
+) +
+  scale_fill_gradientn(
+    colors = c("blue", "white", "red"),
+    name = "SCT\nExpression"
+  ) +
+  theme(axis.text.y = element_text(size = 8))
+
+print(p.cgas.cd45neg)
+
+ggsave(
+  paste0(output.dir, "SupFig2f_cGAS_heatmap_CD45neg.pdf"),
+  p.cgas.cd45neg,
+  width = 10,
+  height = 10,
+  units = "in"
+)
+```
+
+### Panels g-h: cGAS/STING Module Scores
+
+#### Myeloid Module Score (Panel g)
+```{r cgas_module_score_myeloid}
+
+# Add cGAS module score
+cd45pos.d4 <- AddModuleScore(
+  cd45pos.d4,
+  features = list(cgas.present),
+  name = "cGAS",
+  assay = "SCT"
+)
+
+# Rename score column
+cd45pos.d4$cGAS_score <- cd45pos.d4$cGAS1
+cd45pos.d4$cGAS1 <- NULL
+
+# Violin plot with statistics
+p.cgas.vln.myeloid <- VlnPlot2(
+  cd45pos.d4,
+  features = "cGAS_score",
+  group.by = "cell_type",
+  split.by = "Treatment",
+  stat.method = "wilcox.test",
+  p.adjust.method = "holm",
+  label = "p.signif",
+  hide.ns = TRUE
+) +
+  labs(title = "cGAS/STING Module Score - Myeloid Cells",
+       y = "cGAS/STING Score",
+       x = "Cell Type")
+
+print(p.cgas.vln.myeloid)
+
+ggsave(
+  paste0(output.dir, "SupFig2g_cGAS_violin_myeloid.pdf"),
+  p.cgas.vln.myeloid,
+  width = 12,
+  height = 6,
+  units = "in"
+)
+```
+
+#### CD45- Module Score (Panel h)
+```{r cgas_module_score_cd45neg}
+
+# Add cGAS module score
+cd45neg.d4 <- AddModuleScore(
+  cd45neg.d4,
+  features = list(cgas.present),
+  name = "cGAS",
+  assay = "SCT"
+)
+
+# Rename score column
+cd45neg.d4$cGAS_score <- cd45neg.d4$cGAS1
+cd45neg.d4$cGAS1 <- NULL
+
+# Violin plot with statistics
+p.cgas.vln.cd45neg <- VlnPlot2(
+  cd45neg.d4,
+  features = "cGAS_score",
+  group.by = "cell_type",
+  split.by = "Treatment",
+  stat.method = "wilcox.test",
+  p.adjust.method = "holm",
+  label = "p.signif",
+  hide.ns = TRUE
+) +
+  labs(title = "cGAS/STING Module Score - Tumor & Fibroblasts",
+       y = "cGAS/STING Score",
+       x = "Cell Type")
+
+print(p.cgas.vln.cd45neg)
+
+ggsave(
+  paste0(output.dir, "SupFig2h_cGAS_violin_CD45neg.pdf"),
+  p.cgas.vln.cd45neg,
+  width = 10,
+  height = 6,
+  units = "in"
+)
+```
+
+## Summary
+```{r summary}
+cat("=== Supplementary Figure 2 Complete ===\n")
+cat("Output directory:", output.dir, "\n")
+cat("Panels generated:\n")
+cat("  a: ISG heatmap (myeloid cells, Vehicle vs PDS)\n")
+cat("  b: ISG heatmap (CD45- cells, Vehicle vs PDS)\n")
+cat("  c: ISG module score violin plot (myeloid)\n")
+cat("  d: ISG module score violin plot (CD45-)\n")
+cat("  e: cGAS/STING heatmap (myeloid)\n")
+cat("  f: cGAS/STING heatmap (CD45-)\n")
+cat("  g: cGAS/STING module score violin plot (myeloid)\n")
+cat("  h: cGAS/STING module score violin plot (CD45-)\n")
+```
