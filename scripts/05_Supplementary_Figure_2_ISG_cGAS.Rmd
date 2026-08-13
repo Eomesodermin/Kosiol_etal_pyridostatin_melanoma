@@ -2,15 +2,7 @@
 title: "Supplementary Figure 2: ISG and cGAS/STING Module Scores"
 author: "Dillon Corvino"
 date: "`r Sys.Date()`"
-output:
-  html_document:
-    toc: true
-    toc_float: true
-    number_sections: true
-    theme: united
-    highlight: tango
-    df_print: paged
-    code_folding: hide
+output: pdf_document
 editor_options:
   chunk_output_type: console
 ---
@@ -187,7 +179,13 @@ pseudo.myeloid.mat <- as.matrix(pseudo.myeloid)
 pseudo.myeloid.scaled <- t(scale(t(pseudo.myeloid.mat)))
 pseudo.myeloid.scaled[!is.finite(pseudo.myeloid.scaled)] <- 0
 
-# Plot heatmap using pheatmap
+# Order columns: Vehicle then PDS for each cell type
+col.order <- c("DC_Vehicle", "Macrophages_Vehicle", "Monocytes_Vehicle", "Neutrophils_Vehicle",
+               "DC_PDS", "Macrophages_PDS", "Monocytes_PDS", "Neutrophils_PDS")
+col.order <- col.order[col.order %in% colnames(pseudo.myeloid.scaled)]
+pseudo.myeloid.scaled <- pseudo.myeloid.scaled[, col.order]
+
+# Plot heatmap using pheatmap (no clustering)
 p.isg.myeloid <- pheatmap::pheatmap(
   pseudo.myeloid.scaled,
   main = "ISG Signature - Myeloid Cells",
@@ -196,8 +194,8 @@ p.isg.myeloid <- pheatmap::pheatmap(
   color = colorRampPalette(c("blue", "white", "red"))(100),
   breaks = seq(-2, 2, length.out = 101),
   border_color = NA,
-  cluster_cols = TRUE,
-  cluster_rows = TRUE
+  cluster_cols = FALSE,
+  cluster_rows = FALSE
 )
 
 print(p.isg.myeloid)
@@ -230,6 +228,11 @@ pseudo.cd45neg <- pseudo.cd45neg[isg.present.local, , drop = FALSE]
 pseudo.cd45neg.mat <- as.matrix(pseudo.cd45neg)
 pseudo.cd45neg.scaled <- t(scale(t(pseudo.cd45neg.mat))); pseudo.cd45neg.scaled[!is.finite(pseudo.cd45neg.scaled)] <- 0
 
+# Order columns: Vehicle then PDS for each cell type
+col.order.cd45neg <- c("Tumor_Vehicle", "Fibroblasts_Vehicle", "Tumor_PDS", "Fibroblasts_PDS")
+col.order.cd45neg <- col.order.cd45neg[col.order.cd45neg %in% colnames(pseudo.cd45neg.scaled)]
+pseudo.cd45neg.scaled <- pseudo.cd45neg.scaled[, col.order.cd45neg]
+
 p.isg.cd45neg <- pheatmap::pheatmap(
   pseudo.cd45neg.scaled,
   main = "ISG Signature - CD45- Cells",
@@ -237,7 +240,9 @@ p.isg.cd45neg <- pheatmap::pheatmap(
   fontsize_col = 10,
   color = colorRampPalette(c("blue", "white", "red"))(100),
   breaks = seq(-2, 2, length.out = 101),
-  border_color = NA
+  border_color = NA,
+  cluster_cols = FALSE,
+  cluster_rows = FALSE
 )
 
 print(p.isg.cd45neg)
@@ -277,7 +282,8 @@ p.isg.vln.myeloid <- VlnPlot2(
   stat.method = "wilcox.test",
   p.adjust.method = "holm",
   label = "p.signif",
-  hide.ns = TRUE
+  hide.ns = TRUE,
+  pt.size = 0
 ) +
   labs(title = "ISG Module Score - Myeloid Cells",
        y = "ISG Score",
@@ -318,7 +324,8 @@ p.isg.vln.cd45neg <- VlnPlot2(
   stat.method = "wilcox.test",
   p.adjust.method = "holm",
   label = "p.signif",
-  hide.ns = TRUE
+  hide.ns = TRUE,
+  pt.size = 0
 ) +
   labs(title = "ISG Module Score - Tumor & Fibroblasts",
        y = "ISG Score",
@@ -359,6 +366,12 @@ cat("cGAS genes present in myeloid:", nrow(pseudo.myeloid.cgas), "/", length(cga
 pseudo.myeloid.cgas.mat <- as.matrix(pseudo.myeloid.cgas)
 pseudo.myeloid.cgas.scaled <- t(scale(t(pseudo.myeloid.cgas.mat))); pseudo.myeloid.cgas.scaled[!is.finite(pseudo.myeloid.cgas.scaled)] <- 0
 
+# Order columns: Vehicle then PDS for each cell type
+col.order.cgas <- c("DC_Vehicle", "Macrophages_Vehicle", "Monocytes_Vehicle", "Neutrophils_Vehicle",
+                    "DC_PDS", "Macrophages_PDS", "Monocytes_PDS", "Neutrophils_PDS")
+col.order.cgas <- col.order.cgas[col.order.cgas %in% colnames(pseudo.myeloid.cgas.scaled)]
+pseudo.myeloid.cgas.scaled <- pseudo.myeloid.cgas.scaled[, col.order.cgas]
+
 p.cgas.myeloid <- pheatmap::pheatmap(
   pseudo.myeloid.cgas.scaled,
   main = "cGAS/STING Signature - Myeloid Cells",
@@ -366,7 +379,9 @@ p.cgas.myeloid <- pheatmap::pheatmap(
   fontsize_col = 10,
   color = colorRampPalette(c("blue", "white", "red"))(100),
   breaks = seq(-2, 2, length.out = 101),
-  border_color = NA
+  border_color = NA,
+  cluster_cols = FALSE,
+  cluster_rows = FALSE
 )
 
 print(p.cgas.myeloid)
@@ -397,6 +412,11 @@ pseudo.cd45neg.cgas <- pseudo.cd45neg.cgas$SCT
 pseudo.cd45neg.cgas.mat <- as.matrix(pseudo.cd45neg.cgas)
 pseudo.cd45neg.cgas.scaled <- t(scale(t(pseudo.cd45neg.cgas.mat))); pseudo.cd45neg.cgas.scaled[!is.finite(pseudo.cd45neg.cgas.scaled)] <- 0
 
+# Order columns: Vehicle then PDS for each cell type
+col.order.cgas.cd45neg <- c("Tumor_Vehicle", "Fibroblasts_Vehicle", "Tumor_PDS", "Fibroblasts_PDS")
+col.order.cgas.cd45neg <- col.order.cgas.cd45neg[col.order.cgas.cd45neg %in% colnames(pseudo.cd45neg.cgas.scaled)]
+pseudo.cd45neg.cgas.scaled <- pseudo.cd45neg.cgas.scaled[, col.order.cgas.cd45neg]
+
 p.cgas.cd45neg <- pheatmap::pheatmap(
   pseudo.cd45neg.cgas.scaled,
   main = "cGAS/STING Signature - CD45- Cells",
@@ -404,7 +424,9 @@ p.cgas.cd45neg <- pheatmap::pheatmap(
   fontsize_col = 10,
   color = colorRampPalette(c("blue", "white", "red"))(100),
   breaks = seq(-2, 2, length.out = 101),
-  border_color = NA
+  border_color = NA,
+  cluster_cols = FALSE,
+  cluster_rows = FALSE
 )
 
 print(p.cgas.cd45neg)
@@ -444,7 +466,8 @@ p.cgas.vln.myeloid <- VlnPlot2(
   stat.method = "wilcox.test",
   p.adjust.method = "holm",
   label = "p.signif",
-  hide.ns = TRUE
+  hide.ns = TRUE,
+  pt.size = 0
 ) +
   labs(title = "cGAS/STING Module Score - Myeloid Cells",
        y = "cGAS/STING Score",
@@ -485,7 +508,8 @@ p.cgas.vln.cd45neg <- VlnPlot2(
   stat.method = "wilcox.test",
   p.adjust.method = "holm",
   label = "p.signif",
-  hide.ns = TRUE
+  hide.ns = TRUE,
+  pt.size = 0
 ) +
   labs(title = "cGAS/STING Module Score - Tumor & Fibroblasts",
        y = "cGAS/STING Score",
