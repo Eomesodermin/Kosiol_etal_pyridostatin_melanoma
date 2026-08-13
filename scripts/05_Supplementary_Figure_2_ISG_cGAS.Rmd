@@ -2,60 +2,43 @@
 title: "Supplementary Figure 2: ISG and cGAS/STING Module Scores"
 author: "Dillon Corvino"
 date: "`r Sys.Date()`"
-output: pdf_document
 editor_options:
   chunk_output_type: console
 ---
 
 Built with R version `r getRversion()`
 
+Note: this script is intended to be run directly (e.g. via `knitr::purl()` +
+`source()`, or by running chunks interactively) rather than rendered to a
+report. Each panel is saved as its own PDF under `results/Supplementary_Figure_2/`
+so it can be compared directly against the manuscript figure.
+
 ## Setup {.tabset}
 
 ### Environment
 ```{r setup}
-knitr::opts_chunk$set(
-  echo = TRUE,
-  message = FALSE,
-  warning = FALSE,
-  eval = TRUE,
-  tidy = FALSE
-)
-
 rm(list = ls())
-cat("\014")
 gc()
 
-# Establish working directory
-# Use knitr current_input for headless/RStudio compatibility
+# Establish working directory (repo root)
 if (!is.null(knitr::current_input())) {
   setwd(dirname(knitr::current_input()))
   setwd("..")
 }
 
-# Create output directories with absolute paths (for knitr working directory changes)
-output.base <- normalizePath("../results/Supplementary_Figure_2/", mustWork = FALSE)
-if(!dir.exists(dirname(output.base))){
-  dir.create(dirname(output.base), recursive = TRUE)
-}
-if(!dir.exists(output.base)){
+# Output directory (absolute path, robust to knitr working-directory changes)
+output.base <- normalizePath("results/Supplementary_Figure_2", mustWork = FALSE)
+if (!dir.exists(output.base)) {
   dir.create(output.base, recursive = TRUE)
 }
 
-# Define LoadSeuratRds function
-LoadSeuratRds <- function(file) {
-  readRDS(file)
-}
+LoadSeuratRds <- function(file) readRDS(file)
 
-# Load libraries
 library(Seurat)
 library(SeuratObject)
 library(dplyr)
 library(ggplot2)
-library(scCustomize)
 library(SeuratExtend)
-library(tidyr)
-library(pheatmap)
-library(RColorBrewer)
 
 # Load preprocessed Seurat objects from saves/
 # Data should be downloaded from Zenodo (https://doi.org/10.5281/zenodo.21391578) into saves/
@@ -102,178 +85,123 @@ cd45pos.d4 <- subset(cd45pos.seurat, idents = "Day4")
 Idents(cd45pos.d4) <- cd45pos.d4@meta.data$cell_type
 cd45pos.d4 <- subset(cd45pos.d4, idents = myeloid.keep)
 
-# Create combined metadata: CellType_Treatment
-cd45pos.d4$CellType_Treatment <- paste(
-  cd45pos.d4@meta.data$cell_type,
-  cd45pos.d4@meta.data$Treatment,
-  sep = "_"
-)
-
-# Set default assay and factor levels
 DefaultAssay(cd45pos.d4) <- "SCT"
 cd45pos.d4$Treatment <- factor(cd45pos.d4$Treatment, levels = c("Vehicle", "PDS"))
 cd45pos.d4$cell_type <- factor(cd45pos.d4$cell_type, levels = myeloid.keep)
 
+# Desired column/group order for heatmaps and violin plots: Vehicle block then PDS block
+myeloid.col.order <- c("DC_Vehicle", "Macrophages_Vehicle", "Monocytes_Vehicle", "Neutrophils_Vehicle",
+                       "DC_PDS", "Macrophages_PDS", "Monocytes_PDS", "Neutrophils_PDS")
+
 cat("CD45pos Day4 myeloid cells:", dim(cd45pos.d4), "\n")
-cat("Cell type breakdown:\n")
 print(table(cd45pos.d4$cell_type, cd45pos.d4$Treatment))
 ```
 
 ### Prepare CD45- (Tumor + Fibroblast) Subset
 ```{r prepare_cd45neg}
 
-# Only Day 4 data in CD45neg
 DefaultAssay(cd45neg.seurat) <- "SCT"
 
-# Collapse tumor clusters into single "Tumor" category
+# Collapse tumor clusters into a single "Tumor" category; keep Fibroblasts as-is
 cd45neg.seurat$cell_type <- ifelse(
   grepl("^Tumor", cd45neg.seurat$cluster_anno),
   "Tumor",
-  cd45neg.seurat$cluster_anno
+  as.character(cd45neg.seurat$cluster_anno)
 )
 
-# Keep only Tumor and Fibroblasts
 cd45neg.d4 <- subset(cd45neg.seurat, subset = cell_type %in% c("Tumor", "Fibroblasts"))
 
-# Create combined metadata: CellType_Treatment
-cd45neg.d4$CellType_Treatment <- paste(
-  cd45neg.d4@meta.data$cell_type,
-  cd45neg.d4@meta.data$Treatment,
-  sep = "_"
-)
-
-# Set factor levels
 cd45neg.d4$Treatment <- factor(cd45neg.d4$Treatment, levels = c("Vehicle", "PDS"))
 cd45neg.d4$cell_type <- factor(cd45neg.d4$cell_type, levels = c("Tumor", "Fibroblasts"))
 
+# Desired column/group order: Tumor_Vehicle, Fibroblasts_Vehicle, Tumor_PDS, Fibroblasts_PDS
+cd45neg.col.order <- c("Tumor_Vehicle", "Fibroblasts_Vehicle", "Tumor_PDS", "Fibroblasts_PDS")
+
 cat("CD45neg Day4 tumor/fibroblast cells:", dim(cd45neg.d4), "\n")
-cat("Cell type breakdown:\n")
 print(table(cd45neg.d4$cell_type, cd45neg.d4$Treatment))
 ```
 
-## Supplementary Figure 2: ISG Signature {.tabset}
+### Helper: ordered pseudobulk heatmap (DoHeatmap, matches manuscript style)
+```{r heatmap_helper}
 
-### Panel a-b: ISG Pseudobulk Heatmaps
+# Pseudobulk + DoHeatmap with a blue-white-red2 diverging scale (matches
+# scripts/04_CD45Pos_Manuscript_plots.Rmd), forcing Vehicle-then-PDS column
+# order (no row or column clustering - DoHeatmap does not cluster by default).
+plot_pseudobulk_heatmap <- function(seu, features, group.by, col.order, title) {
+  pseudo <- AggregateExpression(
+    seu,
+    assays = "SCT",
+    return.seurat = TRUE,
+    group.by = group.by
+  )
 
-#### Myeloid (Panel a)
+  features.present <- intersect(features, rownames(pseudo))
+  col.order <- col.order[col.order %in% colnames(pseudo)]
+
+  # Force group/column order: DoHeatmap orders by Idents() factor levels,
+  # not by physical column order, so the identity factor must be releveled.
+  Idents(pseudo) <- factor(Idents(pseudo), levels = col.order)
+  pseudo <- pseudo[, col.order]
+
+  p <- DoHeatmap(
+    pseudo,
+    features = features.present,
+    draw.lines = FALSE,
+    angle = 90,
+    raster = FALSE
+  ) +
+    ggplot2::scale_fill_gradient2(low = "blue", high = "red2") +
+    ggplot2::labs(title = title)
+
+  list(plot = p, n.features = length(features.present), n.total = length(features))
+}
+```
+
+## Supplementary Figure 2: ISG Signature
+
+### Panel a: ISG heatmap - Myeloid
 ```{r isg_heatmap_myeloid}
 
-# Pseudobulk aggregation by cell type and treatment
-pseudo.myeloid <- AggregateExpression(
-  cd45pos.d4,
-  assays = "SCT",
-  return.seurat = FALSE,
-  group.by = c("cell_type", "Treatment")
+res <- plot_pseudobulk_heatmap(
+  cd45pos.d4, isg.genes, c("cell_type", "Treatment"), myeloid.col.order,
+  "ISG Signature - Myeloid Cells"
 )
-pseudo.myeloid <- pseudo.myeloid$SCT
+cat("ISG genes present in myeloid:", res$n.features, "/", res$n.total, "\n")
 
-# Keep only ISG genes present in dataset
-isg.present <- intersect(isg.genes, rownames(pseudo.myeloid))
-pseudo.myeloid <- pseudo.myeloid[isg.present, , drop = FALSE]
-
-cat("ISG genes present in myeloid:", nrow(pseudo.myeloid), "/", length(isg.genes), "\n")
-
-# Normalize and visualize heatmap
-pseudo.myeloid.mat <- as.matrix(pseudo.myeloid)
-# Scale for better visualization, replace NaN/Inf with 0
-pseudo.myeloid.scaled <- t(scale(t(pseudo.myeloid.mat)))
-pseudo.myeloid.scaled[!is.finite(pseudo.myeloid.scaled)] <- 0
-
-# Order columns: Vehicle then PDS for each cell type
-col.order <- c("DC_Vehicle", "Macrophages_Vehicle", "Monocytes_Vehicle", "Neutrophils_Vehicle",
-               "DC_PDS", "Macrophages_PDS", "Monocytes_PDS", "Neutrophils_PDS")
-col.order <- col.order[col.order %in% colnames(pseudo.myeloid.scaled)]
-pseudo.myeloid.scaled <- pseudo.myeloid.scaled[, col.order]
-
-# Plot heatmap using pheatmap (no clustering)
-p.isg.myeloid <- pheatmap::pheatmap(
-  pseudo.myeloid.scaled,
-  main = "ISG Signature - Myeloid Cells",
-  fontsize_row = 8,
-  fontsize_col = 10,
-  color = colorRampPalette(c("blue", "white", "red"))(100),
-  breaks = seq(-2, 2, length.out = 101),
-  border_color = NA,
-  cluster_cols = FALSE,
-  cluster_rows = FALSE
-)
-
-print(p.isg.myeloid)
-
-# Save PDF with absolute path
-pdf.file <- file.path(output.base, "SupFig2a_ISG_heatmap_myeloid.pdf")
-pdf(pdf.file, width = 10, height = 12)
-print(p.isg.myeloid)
+pdf(file.path(output.base, "SupFig2a_ISG_heatmap_myeloid.pdf"), width = 8, height = 9)
+print(res$plot)
 dev.off()
-cat("Saved:", pdf.file, "\n")
+print(res$plot)
 ```
 
-#### CD45- (Panel b)
+### Panel b: ISG heatmap - CD45- (Tumor + Fibroblasts)
 ```{r isg_heatmap_cd45neg}
 
-# Pseudobulk aggregation
-pseudo.cd45neg <- AggregateExpression(
-  cd45neg.d4,
-  assays = "SCT",
-  return.seurat = FALSE,
-  group.by = c("cell_type", "Treatment")
+res <- plot_pseudobulk_heatmap(
+  cd45neg.d4, isg.genes, c("cell_type", "Treatment"), cd45neg.col.order,
+  "ISG Signature - Tumor & Fibroblasts"
 )
-pseudo.cd45neg <- pseudo.cd45neg$SCT
+cat("ISG genes present in CD45-:", res$n.features, "/", res$n.total, "\n")
 
-# Get ISG genes present (define locally for chunk scope)
-isg.present.local <- intersect(isg.genes, rownames(pseudo.cd45neg))
-pseudo.cd45neg <- pseudo.cd45neg[isg.present.local, , drop = FALSE]
-
-# Scale and plot heatmap
-pseudo.cd45neg.mat <- as.matrix(pseudo.cd45neg)
-pseudo.cd45neg.scaled <- t(scale(t(pseudo.cd45neg.mat))); pseudo.cd45neg.scaled[!is.finite(pseudo.cd45neg.scaled)] <- 0
-
-# Order columns: Vehicle then PDS for each cell type
-col.order.cd45neg <- c("Tumor_Vehicle", "Fibroblasts_Vehicle", "Tumor_PDS", "Fibroblasts_PDS")
-col.order.cd45neg <- col.order.cd45neg[col.order.cd45neg %in% colnames(pseudo.cd45neg.scaled)]
-pseudo.cd45neg.scaled <- pseudo.cd45neg.scaled[, col.order.cd45neg]
-
-p.isg.cd45neg <- pheatmap::pheatmap(
-  pseudo.cd45neg.scaled,
-  main = "ISG Signature - CD45- Cells",
-  fontsize_row = 8,
-  fontsize_col = 10,
-  color = colorRampPalette(c("blue", "white", "red"))(100),
-  breaks = seq(-2, 2, length.out = 101),
-  border_color = NA,
-  cluster_cols = FALSE,
-  cluster_rows = FALSE
-)
-
-print(p.isg.cd45neg)
-
-pdf(
-  paste0(output.base, "SupFig2b_ISG_heatmap_CD45neg.pdf"),
-  width = 10,
-  height = 12
-)
-print(p.isg.cd45neg)
+pdf(file.path(output.base, "SupFig2b_ISG_heatmap_CD45neg.pdf"), width = 6, height = 9)
+print(res$plot)
 dev.off()
+print(res$plot)
 ```
 
-### Panels c-d: ISG Module Scores
-
-#### Myeloid Module Score (Panel c)
+### Panel c: ISG module score violin - Myeloid
 ```{r isg_module_score_myeloid}
 
-# Add ISG module score
+isg.present <- intersect(isg.genes, rownames(cd45pos.d4))
 cd45pos.d4 <- AddModuleScore(
   cd45pos.d4,
   features = list(isg.present),
   name = "ISG",
   assay = "SCT"
 )
-
-# Rename score column for clarity
 cd45pos.d4$ISG_score <- cd45pos.d4$ISG1
 cd45pos.d4$ISG1 <- NULL
 
-# Violin plot with statistics
 p.isg.vln.myeloid <- VlnPlot2(
   cd45pos.d4,
   features = "ISG_score",
@@ -283,39 +211,28 @@ p.isg.vln.myeloid <- VlnPlot2(
   p.adjust.method = "holm",
   label = "p.signif",
   hide.ns = TRUE,
-  pt.size = 0
+  pt = FALSE
 ) +
-  labs(title = "ISG Module Score - Myeloid Cells",
-       y = "ISG Score",
-       x = "Cell Type")
+  labs(title = "ISG Module Score - Myeloid Cells", y = "ISG Score", x = "Cell Type")
 
+ggsave(file.path(output.base, "SupFig2c_ISG_violin_myeloid.pdf"),
+       p.isg.vln.myeloid, width = 10, height = 6, units = "in")
 print(p.isg.vln.myeloid)
-
-ggsave(
-  paste0(output.base, "SupFig2c_ISG_violin_myeloid.pdf"),
-  p.isg.vln.myeloid,
-  width = 12,
-  height = 6,
-  units = "in"
-)
 ```
 
-#### CD45- Module Score (Panel d)
+### Panel d: ISG module score violin - CD45- (Tumor + Fibroblasts)
 ```{r isg_module_score_cd45neg}
 
-# Add ISG module score
+isg.present.cd45neg <- intersect(isg.genes, rownames(cd45neg.d4))
 cd45neg.d4 <- AddModuleScore(
   cd45neg.d4,
-  features = list(isg.present),
+  features = list(isg.present.cd45neg),
   name = "ISG",
   assay = "SCT"
 )
-
-# Rename score column
 cd45neg.d4$ISG_score <- cd45neg.d4$ISG1
 cd45neg.d4$ISG1 <- NULL
 
-# Violin plot with statistics
 p.isg.vln.cd45neg <- VlnPlot2(
   cd45neg.d4,
   features = "ISG_score",
@@ -325,139 +242,60 @@ p.isg.vln.cd45neg <- VlnPlot2(
   p.adjust.method = "holm",
   label = "p.signif",
   hide.ns = TRUE,
-  pt.size = 0
+  pt = FALSE
 ) +
-  labs(title = "ISG Module Score - Tumor & Fibroblasts",
-       y = "ISG Score",
-       x = "Cell Type")
+  labs(title = "ISG Module Score - Tumor & Fibroblasts", y = "ISG Score", x = "Cell Type")
 
+ggsave(file.path(output.base, "SupFig2d_ISG_violin_CD45neg.pdf"),
+       p.isg.vln.cd45neg, width = 8, height = 6, units = "in")
 print(p.isg.vln.cd45neg)
-
-ggsave(
-  paste0(output.base, "SupFig2d_ISG_violin_CD45neg.pdf"),
-  p.isg.vln.cd45neg,
-  width = 10,
-  height = 6,
-  units = "in"
-)
 ```
 
-## Supplementary Figure 2: cGAS/STING Signature {.tabset}
+## Supplementary Figure 2: cGAS/STING Signature
 
-### Panels e-f: cGAS/STING Pseudobulk Heatmaps
-
-#### Myeloid (Panel e)
+### Panel e: cGAS/STING heatmap - Myeloid
 ```{r cgas_heatmap_myeloid}
 
-# Keep only cGAS genes present in dataset
-cgas.present <- intersect(cgas.genes, rownames(cd45pos.d4))
-pseudo.myeloid.cgas <- AggregateExpression(
-  cd45pos.d4,
-  assays = "SCT",
-  return.seurat = FALSE,
-  group.by = c("cell_type", "Treatment"),
-  features = cgas.present
+res <- plot_pseudobulk_heatmap(
+  cd45pos.d4, cgas.genes, c("cell_type", "Treatment"), myeloid.col.order,
+  "cGAS/STING Signature - Myeloid Cells"
 )
-pseudo.myeloid.cgas <- pseudo.myeloid.cgas$SCT
+cat("cGAS/STING genes present in myeloid:", res$n.features, "/", res$n.total, "\n")
 
-cat("cGAS genes present in myeloid:", nrow(pseudo.myeloid.cgas), "/", length(cgas.genes), "\n")
-
-# Scale and plot heatmap
-pseudo.myeloid.cgas.mat <- as.matrix(pseudo.myeloid.cgas)
-pseudo.myeloid.cgas.scaled <- t(scale(t(pseudo.myeloid.cgas.mat))); pseudo.myeloid.cgas.scaled[!is.finite(pseudo.myeloid.cgas.scaled)] <- 0
-
-# Order columns: Vehicle then PDS for each cell type
-col.order.cgas <- c("DC_Vehicle", "Macrophages_Vehicle", "Monocytes_Vehicle", "Neutrophils_Vehicle",
-                    "DC_PDS", "Macrophages_PDS", "Monocytes_PDS", "Neutrophils_PDS")
-col.order.cgas <- col.order.cgas[col.order.cgas %in% colnames(pseudo.myeloid.cgas.scaled)]
-pseudo.myeloid.cgas.scaled <- pseudo.myeloid.cgas.scaled[, col.order.cgas]
-
-p.cgas.myeloid <- pheatmap::pheatmap(
-  pseudo.myeloid.cgas.scaled,
-  main = "cGAS/STING Signature - Myeloid Cells",
-  fontsize_row = 8,
-  fontsize_col = 10,
-  color = colorRampPalette(c("blue", "white", "red"))(100),
-  breaks = seq(-2, 2, length.out = 101),
-  border_color = NA,
-  cluster_cols = FALSE,
-  cluster_rows = FALSE
-)
-
-print(p.cgas.myeloid)
-
-pdf(
-  paste0(output.base, "SupFig2e_cGAS_heatmap_myeloid.pdf"),
-  width = 10,
-  height = 10
-)
-print(p.cgas.myeloid)
+pdf(file.path(output.base, "SupFig2e_cGAS_heatmap_myeloid.pdf"), width = 8, height = 7)
+print(res$plot)
 dev.off()
+print(res$plot)
 ```
 
-#### CD45- (Panel f)
+### Panel f: cGAS/STING heatmap - CD45- (Tumor + Fibroblasts)
 ```{r cgas_heatmap_cd45neg}
 
-# Pseudobulk for CD45neg
-pseudo.cd45neg.cgas <- AggregateExpression(
-  cd45neg.d4,
-  assays = "SCT",
-  return.seurat = FALSE,
-  group.by = c("cell_type", "Treatment"),
-  features = cgas.present
+res <- plot_pseudobulk_heatmap(
+  cd45neg.d4, cgas.genes, c("cell_type", "Treatment"), cd45neg.col.order,
+  "cGAS/STING Signature - Tumor & Fibroblasts"
 )
-pseudo.cd45neg.cgas <- pseudo.cd45neg.cgas$SCT
+cat("cGAS/STING genes present in CD45-:", res$n.features, "/", res$n.total, "\n")
 
-# Scale and plot heatmap
-pseudo.cd45neg.cgas.mat <- as.matrix(pseudo.cd45neg.cgas)
-pseudo.cd45neg.cgas.scaled <- t(scale(t(pseudo.cd45neg.cgas.mat))); pseudo.cd45neg.cgas.scaled[!is.finite(pseudo.cd45neg.cgas.scaled)] <- 0
-
-# Order columns: Vehicle then PDS for each cell type
-col.order.cgas.cd45neg <- c("Tumor_Vehicle", "Fibroblasts_Vehicle", "Tumor_PDS", "Fibroblasts_PDS")
-col.order.cgas.cd45neg <- col.order.cgas.cd45neg[col.order.cgas.cd45neg %in% colnames(pseudo.cd45neg.cgas.scaled)]
-pseudo.cd45neg.cgas.scaled <- pseudo.cd45neg.cgas.scaled[, col.order.cgas.cd45neg]
-
-p.cgas.cd45neg <- pheatmap::pheatmap(
-  pseudo.cd45neg.cgas.scaled,
-  main = "cGAS/STING Signature - CD45- Cells",
-  fontsize_row = 8,
-  fontsize_col = 10,
-  color = colorRampPalette(c("blue", "white", "red"))(100),
-  breaks = seq(-2, 2, length.out = 101),
-  border_color = NA,
-  cluster_cols = FALSE,
-  cluster_rows = FALSE
-)
-
-print(p.cgas.cd45neg)
-
-pdf(
-  paste0(output.base, "SupFig2f_cGAS_heatmap_CD45neg.pdf"),
-  width = 10,
-  height = 10
-)
-print(p.cgas.cd45neg)
+pdf(file.path(output.base, "SupFig2f_cGAS_heatmap_CD45neg.pdf"), width = 6, height = 7)
+print(res$plot)
 dev.off()
+print(res$plot)
 ```
 
-### Panels g-h: cGAS/STING Module Scores
-
-#### Myeloid Module Score (Panel g)
+### Panel g: cGAS/STING module score violin - Myeloid
 ```{r cgas_module_score_myeloid}
 
-# Add cGAS module score
+cgas.present <- intersect(cgas.genes, rownames(cd45pos.d4))
 cd45pos.d4 <- AddModuleScore(
   cd45pos.d4,
   features = list(cgas.present),
   name = "cGAS",
   assay = "SCT"
 )
-
-# Rename score column
 cd45pos.d4$cGAS_score <- cd45pos.d4$cGAS1
 cd45pos.d4$cGAS1 <- NULL
 
-# Violin plot with statistics
 p.cgas.vln.myeloid <- VlnPlot2(
   cd45pos.d4,
   features = "cGAS_score",
@@ -467,39 +305,28 @@ p.cgas.vln.myeloid <- VlnPlot2(
   p.adjust.method = "holm",
   label = "p.signif",
   hide.ns = TRUE,
-  pt.size = 0
+  pt = FALSE
 ) +
-  labs(title = "cGAS/STING Module Score - Myeloid Cells",
-       y = "cGAS/STING Score",
-       x = "Cell Type")
+  labs(title = "cGAS/STING Module Score - Myeloid Cells", y = "cGAS/STING Score", x = "Cell Type")
 
+ggsave(file.path(output.base, "SupFig2g_cGAS_violin_myeloid.pdf"),
+       p.cgas.vln.myeloid, width = 10, height = 6, units = "in")
 print(p.cgas.vln.myeloid)
-
-ggsave(
-  paste0(output.base, "SupFig2g_cGAS_violin_myeloid.pdf"),
-  p.cgas.vln.myeloid,
-  width = 12,
-  height = 6,
-  units = "in"
-)
 ```
 
-#### CD45- Module Score (Panel h)
+### Panel h: cGAS/STING module score violin - CD45- (Tumor + Fibroblasts)
 ```{r cgas_module_score_cd45neg}
 
-# Add cGAS module score
+cgas.present.cd45neg <- intersect(cgas.genes, rownames(cd45neg.d4))
 cd45neg.d4 <- AddModuleScore(
   cd45neg.d4,
-  features = list(cgas.present),
+  features = list(cgas.present.cd45neg),
   name = "cGAS",
   assay = "SCT"
 )
-
-# Rename score column
 cd45neg.d4$cGAS_score <- cd45neg.d4$cGAS1
 cd45neg.d4$cGAS1 <- NULL
 
-# Violin plot with statistics
 p.cgas.vln.cd45neg <- VlnPlot2(
   cd45neg.d4,
   features = "cGAS_score",
@@ -509,34 +336,26 @@ p.cgas.vln.cd45neg <- VlnPlot2(
   p.adjust.method = "holm",
   label = "p.signif",
   hide.ns = TRUE,
-  pt.size = 0
+  pt = FALSE
 ) +
-  labs(title = "cGAS/STING Module Score - Tumor & Fibroblasts",
-       y = "cGAS/STING Score",
-       x = "Cell Type")
+  labs(title = "cGAS/STING Module Score - Tumor & Fibroblasts", y = "cGAS/STING Score", x = "Cell Type")
 
+ggsave(file.path(output.base, "SupFig2h_cGAS_violin_CD45neg.pdf"),
+       p.cgas.vln.cd45neg, width = 8, height = 6, units = "in")
 print(p.cgas.vln.cd45neg)
-
-ggsave(
-  paste0(output.base, "SupFig2h_cGAS_violin_CD45neg.pdf"),
-  p.cgas.vln.cd45neg,
-  width = 10,
-  height = 6,
-  units = "in"
-)
 ```
 
 ## Summary
 ```{r summary}
 cat("=== Supplementary Figure 2 Complete ===\n")
 cat("Output directory:", output.base, "\n")
-cat("Panels generated:\n")
-cat("  a: ISG heatmap (myeloid cells, Vehicle vs PDS)\n")
-cat("  b: ISG heatmap (CD45- cells, Vehicle vs PDS)\n")
-cat("  c: ISG module score violin plot (myeloid)\n")
-cat("  d: ISG module score violin plot (CD45-)\n")
+cat("Panels generated (one PDF each):\n")
+cat("  a: ISG heatmap (myeloid)\n")
+cat("  b: ISG heatmap (Tumor + Fibroblasts)\n")
+cat("  c: ISG module score violin (myeloid)\n")
+cat("  d: ISG module score violin (Tumor + Fibroblasts)\n")
 cat("  e: cGAS/STING heatmap (myeloid)\n")
-cat("  f: cGAS/STING heatmap (CD45-)\n")
-cat("  g: cGAS/STING module score violin plot (myeloid)\n")
-cat("  h: cGAS/STING module score violin plot (CD45-)\n")
+cat("  f: cGAS/STING heatmap (Tumor + Fibroblasts)\n")
+cat("  g: cGAS/STING module score violin (myeloid)\n")
+cat("  h: cGAS/STING module score violin (Tumor + Fibroblasts)\n")
 ```
