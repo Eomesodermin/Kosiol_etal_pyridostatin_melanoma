@@ -44,6 +44,9 @@ if(!dir.exists(output.dir)){
   dir.create(output.dir, recursive = TRUE)
 }
 
+# Load custom functions from Setup.R (includes LoadSeuratRds)
+source("scripts/Setup.R")
+
 # Load libraries
 library(Seurat)
 library(SeuratObject)
@@ -53,9 +56,10 @@ library(scCustomize)
 library(SeuratExtend)
 library(tidyr)
 
-# Load data from Desktop
-cd45pos.seurat <- readRDS("/Users/dilloncorvino/Desktop/NILS_scRNAseq/Processed_files/Seurat_objects/CD45pos_seurat.rds")
-cd45neg.seurat <- readRDS("/Users/dilloncorvino/Desktop/NILS_scRNAseq/Processed_files/Seurat_objects/CD45neg_seurat.rds")
+# Load preprocessed Seurat objects from saves/
+# Data should be downloaded from Zenodo (https://doi.org/10.5281/zenodo.21391578) into saves/
+cd45pos.seurat <- LoadSeuratRds("saves/CD45pos_seurat.rds")
+cd45neg.seurat <- LoadSeuratRds("saves/CD45neg_seurat.rds")
 
 cat("Data loaded. CD45pos:", dim(cd45pos.seurat), "| CD45neg:", dim(cd45neg.seurat), "\n")
 ```
