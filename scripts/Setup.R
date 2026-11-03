@@ -2,10 +2,8 @@
 start.time <- Sys.time()
 
 # Set working directory to source file location
-setwd(dirname(getActiveDocumentContext()$path))
-
-# since moving script from local to github - I want to adjust work dir to be main github dir - therefore 
-setwd("..")
+if (!requireNamespace("here", quietly = TRUE)) install.packages("here")
+setwd(here::here())   # project root; works in RStudio, knitr and Rscript
 
 working.dir <- getwd()
 

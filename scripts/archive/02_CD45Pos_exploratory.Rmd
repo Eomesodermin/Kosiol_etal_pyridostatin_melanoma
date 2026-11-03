@@ -62,8 +62,8 @@ do.plot <- TRUE
 library("rstudioapi")
 
 # Set working directory to source file location
-setwd(dirname(getActiveDocumentContext()$path))
-setwd("..")
+if (!requireNamespace("here", quietly = TRUE)) install.packages("here")
+setwd(here::here())   # project root; works in RStudio, knitr and Rscript
 
 # Create output directories & load custom functions & colour scheme
 source("scripts/Setup.R", local = knitr::knit_global())
